@@ -10,6 +10,9 @@
   const CONFIG = {
     apiBase: localGet("sf.apiBase", ""),
     pollMs: 5000,
+    // ESP32-CAM: URL หลัก (มี /capture, /control) และ URL สตรีม (ปกติคือพอร์ต 81 /stream)
+    camBase: localGet("sf.camBase", ""),
+    camStream: localGet("sf.camStream", ""),
     // ความเร็วจำลอง: 1 นาทีของปั๊ม = 60000 / DEMO_SPEED ms
     demoSpeed: 20,
   };
@@ -37,6 +40,13 @@
     minus: '<path d="M5 12h14"/>',
     arrow: '<path d="M5 12h14M13 6l6 6-6 6"/>',
     trash: '<path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4h6v3"/>',
+    camera: '<path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3.5"/>',
+    zap: '<path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z"/>',
+    play: '<path d="M7 4.5v15l12-7.5z"/>',
+    pause: '<path d="M8 5v14M16 5v14"/>',
+    expand: '<path d="M8 3H5a2 2 0 0 0-2 2v3M21 8V5a2 2 0 0 0-2-2h-3M3 16v3a2 2 0 0 0 2 2h3M16 21h3a2 2 0 0 0 2-2v-3"/>',
+    download: '<path d="M12 4v11M7 10l5 5 5-5M5 20h14"/>',
+    image: '<rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="9" cy="9" r="2"/><path d="m21 15-4-4L5 21"/>',
     wifi: '<path d="M5 12.55a11 11 0 0 1 14.08 0M1.42 9a16 16 0 0 1 21.16 0M8.53 16.11a6 6 0 0 1 6.95 0"/><circle cx="12" cy="20" r="1"/>',
   };
   const icon = (n, extra = "") => `<svg class="i" viewBox="0 0 24 24" aria-hidden="true" ${extra}>${P[n]}</svg>`;
@@ -78,6 +88,7 @@
     unread: 1,
     history: null,
     lastFired: {},
+    camera: { flash: false, res: 8, timelapse: false, every: 60, lastShot: 0 },
   });
 
   let state = Object.assign(defaultState(), localGet("sf.state", {}));
@@ -90,6 +101,8 @@
     autoFilter: "all",
     range: "day",
     metric: "soil",
+    camPlaying: true,
+    camFull: false,
   };
 
   function save() {
@@ -360,6 +373,13 @@
       }
     }
 
+    // camera time-lapse
+    const cam = state.camera;
+    if (cam.timelapse && Date.now() - (cam.lastShot || 0) >= cam.every * 60000) {
+      cam.lastShot = Date.now();
+      takeSnapshot("auto");
+    }
+
     // keep "now" point of history current; push a new point each hour
     const hist = state.history;
     hist.day[hist.day.length - 1] = { soil: s.soil, temp: s.temp, hum: s.hum, lux: s.lux };
@@ -384,6 +404,7 @@
       ["home", "home", "หน้าหลัก"],
       ["devices", "grid", "อุปกรณ์"],
       ["auto", "refresh", "อัตโนมัติ"],
+      ["camera", "camera", "กล้อง"],
       ["data", "chart", "ข้อมูล"],
     ];
     return `<nav class="nav">${items.map(([r, i, l]) =>
@@ -463,6 +484,9 @@
         <button class="tile" data-go="data"><span class="sq c-orange">${icon("thermo")}</span><span><small>อุณหภูมิดิน</small><b>${fmt1(s.soilTemp)}°C</b></span></button>
         <button class="tile" data-go="pump"><span class="sq c-green">${icon("clock")}</span><span><small>รดน้ำวันนี้</small><b>${Math.round(state.pump.minutesToday)} นาที</b></span></button>
       </div>
+
+      <div class="row-between"><h2 class="section">กล้อง</h2><button class="link" data-go="camera">ดูสด</button></div>
+      ${camHomeCard()}
     </section>${navBar()}`;
   };
 
@@ -475,6 +499,7 @@
       { id: "dht", type: "sensor", name: "อุณหภูมิ/ความชื้นอากาศ", sub: "DHT22 · GPIO4", icon: "thermo", c: "c-orange", value: `${fmt1(s.temp)}°C`, metric: "temp" },
       { id: "lux", type: "sensor", name: "ความเข้มแสง", sub: "BH1750 · I2C", icon: "sun", c: "c-yellow", value: `${fmtNum(s.lux)} lux`, metric: "lux" },
       { id: "tank", type: "sensor", name: "ระดับน้ำในถัง", sub: "JSN-SR04T", icon: "tank", c: "c-blue", value: `${Math.round(s.tank)}%`, go: "pump" },
+      { id: "cam", type: "sensor", name: "กล้องแปลงผัก", sub: "ESP32-CAM · OV2640", icon: "camera", c: "c-green", value: CONFIG.camBase ? "LIVE" : "จำลอง", go: "camera" },
     ];
   }
 
@@ -495,7 +520,7 @@
 
   views.devices = () => `
     <section class="screen">
-      <div class="head-row"><h1 class="title">อุปกรณ์</h1><span class="meta">ต่อกับ ESP32 · 6 ชิ้น</span></div>
+      <div class="head-row"><h1 class="title">อุปกรณ์</h1><span class="meta">ต่อกับ ESP32 · 7 ชิ้น</span></div>
       <label class="search">${icon("search", 'style="color:#4b544e"')}<input id="dev-search" type="search" placeholder="ค้นหาอุปกรณ์" value="${esc(ui.devQuery)}" autocomplete="off"></label>
       <div class="chips">
         ${[["all", "ทั้งหมด"], ["control", "ควบคุม"], ["sensor", "เซนเซอร์"]].map(([k, l]) =>
@@ -678,6 +703,335 @@
     </section>${navBar()}`;
   };
 
+  /* ---------- Camera (ESP32-CAM) ---------- */
+  const RES = { 5: "QVGA 320×240", 8: "VGA 640×480", 9: "SVGA 800×600", 11: "HD 1280×720" };
+  const MAX_SNAPS = 12;
+  let snaps = localGet("sf.snaps", []);
+  let camRAF = null;
+  let camError = false;
+
+  function saveSnaps() {
+    // localStorage มีพื้นที่จำกัด — ถ้าเต็ม ให้ทิ้งภาพเก่าทีละภาพ
+    while (snaps.length) {
+      try { localStorage.setItem("sf.snaps", JSON.stringify(snaps)); return; } catch (e) { snaps.pop(); }
+    }
+    try { localStorage.removeItem("sf.snaps"); } catch (e) { /* ignore */ }
+  }
+
+  function camUrls() {
+    const base = CONFIG.camBase.replace(/\/$/, "");
+    let stream = CONFIG.camStream;
+    if (!stream && base) {
+      try { const u = new URL(base); stream = `${u.protocol}//${u.hostname}:81/stream`; } catch (e) { stream = base + ":81/stream"; }
+    }
+    return { base, stream, capture: base + "/capture", control: (v, val) => `${base}/control?var=${v}&val=${val}` };
+  }
+
+  function camControl(v, val) {
+    if (!CONFIG.camBase) return;
+    fetch(camUrls().control(v, val), { mode: "no-cors" }).catch(() => toast("ส่งคำสั่งไปกล้องไม่สำเร็จ"));
+  }
+
+  // ฉากจำลองสำหรับโหมดไม่มีกล้องจริง (ถูกใช้ทั้งแสดงผลสดและถ่ายภาพ)
+  function drawScene(ctx, w, h, t) {
+    const horizon = h * 0.5;
+    const sky = ctx.createLinearGradient(0, 0, 0, horizon);
+    sky.addColorStop(0, "#d9eadc"); sky.addColorStop(1, "#a9cdb0");
+    ctx.fillStyle = sky; ctx.fillRect(0, 0, w, horizon);
+    const soil = ctx.createLinearGradient(0, horizon, 0, h);
+    soil.addColorStop(0, "#7a5a3c"); soil.addColorStop(1, "#4a3523");
+    ctx.fillStyle = soil; ctx.fillRect(0, horizon, w, h - horizon);
+
+    // greenhouse frame
+    ctx.strokeStyle = "rgba(255,255,255,.45)"; ctx.lineWidth = w / 260;
+    ctx.beginPath(); ctx.moveTo(0, horizon * 0.35); ctx.quadraticCurveTo(w / 2, -horizon * 0.25, w, horizon * 0.35); ctx.stroke();
+    for (let i = 1; i < 6; i++) { const x = (w / 6) * i; ctx.beginPath(); ctx.moveTo(x, horizon * 0.1); ctx.lineTo(w / 2 + (x - w / 2) * 0.55, horizon); ctx.stroke(); }
+
+    // planting rows (perspective)
+    const rows = [[0.58, 0.45, 9], [0.7, 0.68, 7], [0.86, 1, 5]];
+    rows.forEach(([ry, sc, n], ri) => {
+      const y = h * ry, span = w * (0.5 + sc * 0.5);
+      ctx.fillStyle = "rgba(40,28,18,.35)";
+      ctx.fillRect((w - span) / 2, y + 2 * sc, span, 10 * sc * (w / 640));
+      for (let i = 0; i < n; i++) {
+        const x = (w - span) / 2 + (span / n) * (i + 0.5);
+        const sway = Math.sin(t / 900 + i * 1.3 + ri) * 0.12;
+        const s = sc * (w / 640) * (0.9 + ((i * 7 + ri * 3) % 5) * 0.06);
+        ctx.save(); ctx.translate(x, y); ctx.rotate(sway); ctx.scale(s, s);
+        ctx.fillStyle = "#3e7d4d"; ctx.fillRect(-2, -34, 4, 34);
+        [[-16, -30, -0.5, "#5ea86c"], [16, -36, 0.5, "#6cbb7a"], [-10, -48, -0.2, "#7cc08a"], [10, -52, 0.25, "#8fd09c"]].forEach(([lx, ly, r, c]) => {
+          ctx.fillStyle = c; ctx.beginPath(); ctx.ellipse(lx, ly, 17, 8, r, 0, Math.PI * 2); ctx.fill();
+        });
+        ctx.restore();
+      }
+    });
+
+    // pump running → water drops
+    if (state.pump.on) {
+      ctx.strokeStyle = "rgba(120,170,230,.7)"; ctx.lineWidth = w / 320;
+      for (let i = 0; i < 40; i++) {
+        const x = ((i * 97) % w), y = (((t / 4) + i * 53) % (h - horizon)) + horizon * 0.8;
+        ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x, y + h / 40); ctx.stroke();
+      }
+    }
+    // grow light / flash tint
+    if (state.light.on) { ctx.fillStyle = "rgba(255,214,120,.14)"; ctx.fillRect(0, 0, w, h); }
+    if (state.camera.flash) { ctx.fillStyle = "rgba(255,255,255,.18)"; ctx.fillRect(0, 0, w, h); }
+
+    // sensor noise
+    for (let i = 0; i < 160; i++) {
+      ctx.fillStyle = `rgba(255,255,255,${Math.random() * 0.08})`;
+      ctx.fillRect(Math.random() * w, Math.random() * h, 2, 2);
+    }
+    // timestamp
+    const d = new Date();
+    const fs = Math.round(w / 34);
+    ctx.font = `500 ${fs}px Kanit, sans-serif`;
+    ctx.fillStyle = "rgba(0,0,0,.45)"; ctx.fillRect(0, h - fs * 1.8, w, fs * 1.8);
+    ctx.fillStyle = "#fff";
+    ctx.fillText(`ESP32-CAM  ${d.toLocaleDateString("th-TH")} ${d.toLocaleTimeString("th-TH")}`, fs * 0.6, h - fs * 0.6);
+  }
+
+  function captureReal() {
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.crossOrigin = "anonymous";
+      const timer = setTimeout(() => resolve(null), 10000);
+      img.onload = () => {
+        clearTimeout(timer);
+        try {
+          const scale = Math.min(1, 640 / img.naturalWidth);
+          const c = document.createElement("canvas");
+          c.width = Math.round(img.naturalWidth * scale);
+          c.height = Math.round(img.naturalHeight * scale);
+          c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+          resolve(c.toDataURL("image/jpeg", 0.75));
+        } catch (e) { resolve(null); } // CORS ไม่ผ่าน
+      };
+      img.onerror = () => { clearTimeout(timer); resolve(null); };
+      img.src = camUrls().capture + "?_t=" + Date.now();
+    });
+  }
+
+  async function takeSnapshot(source) {
+    let src;
+    if (CONFIG.camBase) {
+      src = await captureReal();
+    } else {
+      const c = document.createElement("canvas");
+      c.width = 640; c.height = 480;
+      drawScene(c.getContext("2d"), 640, 480, performance.now());
+      src = c.toDataURL("image/jpeg", 0.75);
+    }
+    if (!src) {
+      if (source === "user") toast("ถ่ายภาพไม่สำเร็จ ตรวจสอบการเชื่อมต่อกล้อง");
+      return;
+    }
+    snaps.unshift({ at: Date.now(), src, auto: source === "auto" });
+    snaps = snaps.slice(0, MAX_SNAPS);
+    saveSnaps();
+    state.camera.lastShot = Date.now();
+    save();
+    if (source === "user") {
+      const v = document.getElementById("cam-view");
+      if (v) { v.classList.remove("shutter"); void v.offsetWidth; v.classList.add("shutter"); }
+      toast("บันทึกภาพแล้ว");
+    }
+    if (ui.route === "camera") refreshCamera();
+    else if (ui.route === "home") refresh();
+  }
+
+  function camStatusText() {
+    if (!CONFIG.camBase) return "โหมดจำลอง";
+    return camError ? "เชื่อมต่อกล้องไม่ได้" : "ESP32-CAM ออนไลน์";
+  }
+
+  function camHomeCard() {
+    const last = snaps[0];
+    return `<button class="cam-card" data-go="camera">
+      <span class="cam-thumb">${last ? `<img src="${last.src}" alt="ภาพล่าสุด">` : icon("camera")}</span>
+      <span class="txt"><b>กล้องแปลงผัก</b>
+        <span><span class="status-dot ${CONFIG.camBase && camError ? "off" : ""}"></span>${camStatusText()}</span>
+        <span>${last ? `ภาพล่าสุด ${hhmm(last.at)}` : "ยังไม่มีภาพ"}${state.camera.timelapse ? ` · ถ่ายอัตโนมัติทุก ${everyLabel(state.camera.every)}` : ""}</span></span>
+      ${icon("arrow", 'style="color:var(--primary)"')}
+    </button>`;
+  }
+
+  const everyLabel = (m) => (m < 60 ? `${m} นาที` : `${m / 60} ชม.`);
+
+  function camGalleryHTML() {
+    if (!snaps.length) return `<div class="empty" style="grid-column:1/-1;padding:24px 0">ยังไม่มีภาพ กด “ถ่ายภาพ” เพื่อเริ่ม</div>`;
+    return snaps.map((sn, i) => `<button class="snap" data-snap="${i}" aria-label="ภาพเวลา ${hhmm(sn.at)}">
+      <img src="${sn.src}" alt="" loading="lazy"><span>${sn.auto ? "อัตโนมัติ · " : ""}${hhmm(sn.at)}</span></button>`).join("");
+  }
+
+  views.camera = () => {
+    const live = ui.camPlaying;
+    const real = !!CONFIG.camBase;
+    const cam = state.camera;
+    const viewInner = !live
+      ? `<div class="cam-paused">${snaps[0] ? `<img src="${snaps[0].src}" alt="">` : ""}<button class="cam-play" data-cam="play" aria-label="เล่น">${icon("play")}</button></div>`
+      : real
+        ? `<img id="cam-stream" data-src="${esc(camUrls().stream)}" alt="ภาพสดจากกล้อง">
+           <div class="cam-offline" id="cam-offline" ${camError ? "" : "hidden"}>${icon("wifi")}<b>เชื่อมต่อกล้องไม่ได้</b><span>ตรวจสอบ URL และให้มือถืออยู่ Wi-Fi เดียวกับกล้อง</span></div>`
+        : `<canvas id="cam-canvas" width="640" height="480"></canvas>`;
+    return `
+    <section class="screen">
+      <div class="head-row"><h1 class="title">กล้อง</h1><span class="meta" id="cam-status">${camStatusText()}</span></div>
+      <div class="cam-view ${ui.camFull ? "full" : ""}" id="cam-view">
+        ${viewInner}
+        <span class="cam-badge ${live ? "live" : ""}">${live ? "● LIVE" : "หยุดชั่วคราว"}</span>
+        <span class="cam-res">${RES[cam.res].split(" ")[0]}</span>
+        <button class="cam-fs" data-cam="full" aria-label="เต็มจอ">${icon(ui.camFull ? "minus" : "expand")}</button>
+      </div>
+
+      <div class="cam-controls">
+        <button data-cam="${live ? "pause" : "play"}"><span class="round">${icon(live ? "pause" : "play")}</span>${live ? "หยุด" : "เล่น"}</button>
+        <button data-cam="flash" class="${cam.flash ? "on" : ""}"><span class="round">${icon("zap")}</span>แฟลช${cam.flash ? "เปิด" : "ปิด"}</button>
+        <button data-cam="shot" class="primary"><span class="round">${icon("camera")}</span>ถ่ายภาพ</button>
+        <button data-cam="full"><span class="round">${icon("expand")}</span>เต็มจอ</button>
+      </div>
+
+      <div class="info-card">
+        <button class="info-row" data-cam="res"><span class="sq c-green">${icon("image")}</span><span><small>ความละเอียด</small><b>${RES[cam.res]}</b></span></button>
+        <div class="info-row"><span class="sq c-yellow">${icon("clock")}</span>
+          <span class="txt clickable" data-cam="every" style="flex:1"><small>ถ่ายภาพอัตโนมัติ (ไทม์แลปส์)</small><b>${cam.timelapse ? `ทุก ${everyLabel(cam.every)}` : "ปิดอยู่"}</b></span>
+          <button class="switch ${cam.timelapse ? "on" : ""}" data-cam="timelapse" role="switch" aria-checked="${cam.timelapse}" aria-label="ถ่ายภาพอัตโนมัติ"></button></div>
+        <button class="info-row" data-cam="settings"><span class="sq c-blue">${icon("wifi")}</span><span><small>การเชื่อมต่อ</small><b>${real ? esc(CONFIG.camBase) : "ยังไม่ได้ตั้งค่า (โหมดจำลอง)"}</b></span></button>
+      </div>
+
+      <div class="row-between"><h2 class="section">ภาพที่บันทึก</h2><span class="meta muted" id="cam-count">${snaps.length}/${MAX_SNAPS}</span></div>
+      <div class="gallery" id="cam-gallery">${camGalleryHTML()}</div>
+    </section>${navBar()}`;
+  };
+
+  // called after every render: attaches stream / starts demo animation
+  function mountCamera(oldStream) {
+    if (ui.route !== "camera") { stopCamLoop(); return; }
+    const ph = app.querySelector("#cam-stream");
+    if (ph) {
+      if (oldStream && oldStream.dataset.src === ph.dataset.src) ph.replaceWith(oldStream); // ไม่เปิดสตรีมซ้ำ (ESP32-CAM รับได้ทีละ 1 คน)
+      else { camError = false; ph.src = ph.dataset.src; }
+    }
+    if (app.querySelector("#cam-canvas") && !camRAF) camRAF = requestAnimationFrame(camLoop);
+  }
+  function camLoop(t) {
+    const c = document.getElementById("cam-canvas");
+    if (!c || ui.route !== "camera") { camRAF = null; return; }
+    drawScene(c.getContext("2d"), c.width, c.height, t);
+    camRAF = requestAnimationFrame(camLoop);
+  }
+  function stopCamLoop() { if (camRAF) cancelAnimationFrame(camRAF); camRAF = null; }
+
+  function refreshCamera() {
+    const g = document.getElementById("cam-gallery");
+    if (g) g.innerHTML = camGalleryHTML();
+    const n = document.getElementById("cam-count");
+    if (n) n.textContent = `${snaps.length}/${MAX_SNAPS}`;
+    const st = document.getElementById("cam-status");
+    if (st) st.textContent = camStatusText();
+  }
+
+  // stream errors (img error events don't bubble → capture phase)
+  document.addEventListener("error", (e) => {
+    if (e.target && e.target.id === "cam-stream") {
+      camError = true;
+      const o = document.getElementById("cam-offline");
+      if (o) o.hidden = false;
+      refreshCamera();
+    }
+  }, true);
+
+  function setCamFull(on) {
+    ui.camFull = on;
+    const v = document.getElementById("cam-view");
+    if (!v) return;
+    v.classList.toggle("full", on);
+    const btn = v.querySelector(".cam-fs");
+    if (btn) btn.innerHTML = icon(on ? "minus" : "expand");
+    document.body.style.overflow = on ? "hidden" : "";
+  }
+
+  function camAction(a, snapIdx) {
+    const cam = state.camera;
+    if (snapIdx !== undefined) return snapSheet(Number(snapIdx));
+    switch (a) {
+      case "play": ui.camPlaying = true; camError = false; return render();
+      case "pause": ui.camPlaying = false; return render();
+      case "shot": return takeSnapshot("user");
+      case "flash":
+        cam.flash = !cam.flash;
+        camControl("led_intensity", cam.flash ? 255 : 0);
+        return afterChange(cam.flash ? "เปิดแฟลชแล้ว" : "ปิดแฟลชแล้ว");
+      case "full": return setCamFull(!ui.camFull);
+      case "timelapse":
+        cam.timelapse = !cam.timelapse;
+        if (cam.timelapse) cam.lastShot = Date.now();
+        return afterChange(cam.timelapse ? `ถ่ายอัตโนมัติทุก ${everyLabel(cam.every)}` : "ปิดถ่ายอัตโนมัติ");
+      case "res":
+        return openSheet(`<h3>ความละเอียดภาพ</h3><div class="seg">${Object.entries(RES).map(([k, l]) =>
+          `<button type="button" class="${cam.res === Number(k) ? "active" : ""}" data-res="${k}">${l}</button>`).join("")}</div>
+          <p class="muted" style="font-size:13.5px">ความละเอียดสูงจะใช้เน็ตมากและภาพสดอาจกระตุก</p>`, (el) => {
+          el.addEventListener("click", (e) => {
+            const b = e.target.closest("[data-res]"); if (!b) return;
+            cam.res = Number(b.dataset.res);
+            camControl("framesize", cam.res);
+            closeSheet(); afterChange(`ความละเอียด ${RES[cam.res]}`);
+          });
+        });
+      case "every":
+        return openSheet(`<h3>ถ่ายภาพอัตโนมัติทุก</h3><div class="seg">${[15, 30, 60, 180, 360, 720].map((m) =>
+          `<button type="button" class="${cam.every === m ? "active" : ""}" data-every="${m}">${everyLabel(m)}</button>`).join("")}</div>
+          <p class="muted" style="font-size:13.5px">ต้องเปิดหน้าเว็บค้างไว้ ภาพจะถูกเก็บในเครื่องนี้สูงสุด ${MAX_SNAPS} ภาพ</p>`, (el) => {
+          el.addEventListener("click", (e) => {
+            const b = e.target.closest("[data-every]"); if (!b) return;
+            cam.every = Number(b.dataset.every); cam.timelapse = true; cam.lastShot = Date.now();
+            closeSheet(); afterChange(`ถ่ายอัตโนมัติทุก ${everyLabel(cam.every)}`);
+          });
+        });
+      case "settings": return camSettingsSheet();
+    }
+  }
+
+  function snapSheet(i) {
+    const sn = snaps[i];
+    if (!sn) return;
+    const name = `smartfarm-${new Date(sn.at).toISOString().slice(0, 16).replace(/[:T]/g, "-")}.jpg`;
+    openSheet(`<h3>${sn.auto ? "ภาพอัตโนมัติ" : "ภาพที่ถ่าย"} · ${hhmm(sn.at)}</h3>
+      <img class="snap-full" src="${sn.src}" alt="">
+      <a class="btn btn-solid" href="${sn.src}" download="${name}" style="text-decoration:none">${icon("download")} ดาวน์โหลด</a>
+      <button class="btn" style="height:50px;color:var(--orange)" data-del>${icon("trash")} ลบภาพนี้</button>`, (el) => {
+      el.querySelector("[data-del]").addEventListener("click", () => {
+        snaps.splice(i, 1); saveSnaps(); closeSheet(); refreshCamera(); toast("ลบภาพแล้ว");
+      });
+    });
+  }
+
+  function camSettingsSheet() {
+    openSheet(`<h3>เชื่อมต่อ ESP32-CAM</h3>
+      <div class="field"><label>URL กล้อง (เว้นว่างเพื่อใช้โหมดจำลอง)</label>
+        <input name="cam" type="url" placeholder="http://192.168.1.60" value="${esc(CONFIG.camBase)}"></div>
+      <div class="field"><label>URL สตรีม (ไม่บังคับ — ค่าเริ่มต้น :81/stream)</label>
+        <input name="stream" type="url" placeholder="http://192.168.1.60:81/stream" value="${esc(CONFIG.camStream)}"></div>
+      <p class="muted" style="font-size:13.5px;margin:0 0 10px">ใช้ได้กับตัวอย่าง <b>CameraWebServer</b> ของ Arduino หรือโค้ดใน <b>firmware/esp32cam</b></p>
+      <button class="btn btn-solid" data-save>บันทึก</button>`, (el) => {
+      el.querySelector("[data-save]").addEventListener("click", () => {
+        CONFIG.camBase = el.querySelector('[name="cam"]').value.trim();
+        CONFIG.camStream = el.querySelector('[name="stream"]').value.trim();
+        localSet("sf.camBase", CONFIG.camBase);
+        localSet("sf.camStream", CONFIG.camStream);
+        camError = false;
+        closeSheet();
+        if (CONFIG.camBase) { camControl("framesize", state.camera.res); camControl("led_intensity", state.camera.flash ? 255 : 0); }
+        ui.camPlaying = true;
+        render();
+        toast(CONFIG.camBase ? "เชื่อมต่อกล้องแล้ว" : "ใช้โหมดจำลอง");
+      });
+    });
+  }
+
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape" && ui.camFull) setCamFull(false); });
+
   /* ---------- Render ---------- */
   const app = document.getElementById("app");
   let prevRoute = null;
@@ -685,10 +1039,12 @@
 
   function render() {
     const html = (views[ui.route] || views.home)();
+    const oldStream = app.querySelector("#cam-stream");
     app.innerHTML = html;
     const screen = app.firstElementChild;
     if (prevRoute === ui.route && screen) screen.style.animation = "none";
     prevRoute = ui.route;
+    mountCamera(oldStream);
   }
 
   // partial refresh for periodic updates (keeps inputs focused)
@@ -698,12 +1054,14 @@
       if (list) { list.innerHTML = devicesListHTML(); return; }
     }
     if (ui.route === "welcome") return;
+    if (ui.route === "camera") return refreshCamera();
     const y = window.scrollY;
     render();
     window.scrollTo(0, y);
   }
 
   function go(route) {
+    if (ui.camFull) { ui.camFull = false; document.body.style.overflow = ""; }
     if (route === "back") {
       route = stack.pop() || "home";
     } else if (route === "light" || route === "pump") {
@@ -903,10 +1261,11 @@
 
   /* ---------- Events ---------- */
   app.addEventListener("click", (e) => {
-    const t = e.target.closest("[data-go],[data-action],[data-quick],[data-toggle],[data-devfilter],[data-autofilter],[data-rule],[data-edit],[data-mode],[data-threshold],[data-range],[data-metric-tab]");
+    const t = e.target.closest("[data-go],[data-action],[data-quick],[data-toggle],[data-devfilter],[data-autofilter],[data-rule],[data-edit],[data-mode],[data-threshold],[data-range],[data-metric-tab],[data-cam],[data-snap]");
     if (!t) return;
     const d = t.dataset;
 
+    if (d.cam || d.snap) return camAction(d.cam || "view", d.snap);
     if (d.toggle) {
       if (d.toggle === "light") {
         if (state.light.mode !== "manual" && state.autoOn) {
