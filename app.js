@@ -460,6 +460,7 @@
         <button class="icon-btn" data-action="notifications" aria-label="การแจ้งเตือน">${icon("bell")}${state.unread ? '<span class="dot"></span>' : ""}</button>
       </header>
 
+      ${installBanner()}
       <div class="cols"><div class="col">
       <div class="farm-card">
         <div class="loc">${icon("pin")}<div>
@@ -1047,6 +1048,35 @@
 
   document.addEventListener("keydown", (e) => { if (e.key === "Escape" && ui.camFull) setCamFull(false); });
 
+  /* ---------- App install (PWA) ---------- */
+  const isNative = !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
+  const isStandalone = () => isNative || window.matchMedia("(display-mode: standalone)").matches || navigator.standalone === true;
+  const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+  let installEvt = null;
+
+  window.addEventListener("beforeinstallprompt", (e) => {
+    e.preventDefault();
+    installEvt = e;
+    if (ui.route === "home") render();
+  });
+  window.addEventListener("appinstalled", () => { installEvt = null; toast("ติดตั้งแอปแล้ว"); if (ui.route === "home") render(); });
+
+  function installBanner() {
+    if (isStandalone() || localGet("sf.installDismissed", false)) return "";
+    if (!installEvt && !isIOS) return "";
+    const hint = installEvt ? "เปิดเร็วขึ้น ใช้แบบเต็มจอ และเปิดได้แม้ไม่มีเน็ต" : "แตะปุ่มแชร์ แล้วเลือก “เพิ่มไปยังหน้าจอโฮม”";
+    return `<div class="install-card">
+      <img src="icons/icon-192.png" alt="" width="44" height="44">
+      <div class="txt"><b>ติดตั้งแอป Smart Farm</b><span>${hint}</span></div>
+      ${installEvt ? `<button class="btn-install" data-action="install">ติดตั้ง</button>` : ""}
+      <button class="install-x" data-action="install-dismiss" aria-label="ปิด">×</button>
+    </div>`;
+  }
+
+  if ("serviceWorker" in navigator && !isNative && location.protocol.startsWith("http")) {
+    window.addEventListener("load", () => navigator.serviceWorker.register("sw.js").catch(() => {}));
+  }
+
   /* ---------- Render ---------- */
   const app = document.getElementById("app");
   let prevRoute = null;
@@ -1336,6 +1366,10 @@
       case "duration": return durationSheet();
       case "pump-now": startPump(state.pump.duration, "user"); return afterChange();
       case "pump-stop": stopPump("user"); return afterChange();
+      case "install":
+        if (installEvt) { installEvt.prompt(); installEvt.userChoice.finally(() => { installEvt = null; render(); }); }
+        return;
+      case "install-dismiss": localSet("sf.installDismissed", true); return render();
     }
   });
 

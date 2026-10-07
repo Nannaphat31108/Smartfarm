@@ -16,6 +16,25 @@
 
 การตั้งค่าและข้อมูลถูกเก็บไว้ใน `localStorage` ของเบราว์เซอร์
 
+## ติดตั้งเป็นแอป
+
+### Android (APK)
+ทุกครั้งที่ push ขึ้น `main` GitHub Actions จะ build แอปให้อัตโนมัติ
+ดาวน์โหลดได้ที่ **[Releases → android-latest](../../releases/tag/android-latest)** → `SmartFarm.apk` แล้วเปิดในมือถือเพื่อติดตั้ง
+
+แอป Android ต่อ ESP32 / ESP32-CAM ผ่าน `http://` ในวง Wi-Fi บ้านได้โดยตรง (ไม่ติดปัญหา https เหมือนเปิดผ่านเว็บ)
+
+build เองในเครื่อง (ต้องมี Android Studio):
+```bash
+npm install
+npm run build && npx cap add android && scripts/prepare-android.sh
+npx cap sync android && npx cap open android
+```
+
+### iPhone / Android แบบ PWA
+เปิดเว็บ (เช่นลิงก์ Render) → iPhone: Safari → แชร์ → *เพิ่มไปยังหน้าจอโฮม* · Android: Chrome จะขึ้นปุ่ม **ติดตั้ง** ที่หน้าหลัก
+แอปแบบ PWA เปิดได้แม้ไม่มีเน็ต (ข้อมูลจริงยังต้องต่อ ESP32)
+
 ## เชื่อมต่อ ESP32
 ค่าเริ่มต้นเป็น **โหมดจำลอง** (สุ่มค่าเซนเซอร์ให้) — เปลี่ยนเป็นข้อมูลจริงได้ที่หน้า ไฟปลูก/ปั๊มน้ำ → เมนู ⋮ → *ตั้งค่าการเชื่อมต่อ ESP32* แล้วใส่ URL เช่น `http://192.168.1.50`
 
