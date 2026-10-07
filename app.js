@@ -1247,7 +1247,8 @@
         <input name="api" type="url" placeholder="http://192.168.1.50" value="${esc(CONFIG.apiBase)}"></div>
       <p class="muted" style="font-size:13.5px;margin:0 0 10px">แอปจะเรียก <b>GET /sensors</b> ทุก 5 วินาที และ <b>POST /relay</b> เมื่อสั่งเปิด/ปิด</p>
       <button class="btn btn-solid" data-set="save">บันทึก</button>
-      <button class="btn" style="height:50px;color:var(--orange)" data-set="reset">รีเซ็ตข้อมูลทั้งหมด</button>`, (el) => {
+      <button class="btn" style="height:50px;color:var(--orange)" data-set="reset">รีเซ็ตข้อมูลทั้งหมด</button>
+      <a href="privacy.html" target="_blank" rel="noopener" class="muted" style="display:block;text-align:center;font-size:13.5px;margin-top:6px">นโยบายความเป็นส่วนตัว</a>`, (el) => {
       el.querySelector('[data-set="save"]').addEventListener("click", () => {
         CONFIG.apiBase = el.querySelector("input").value.trim();
         localSet("sf.apiBase", CONFIG.apiBase);

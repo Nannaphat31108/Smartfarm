@@ -31,6 +31,9 @@ npm run build && npx cap add android && scripts/prepare-android.sh
 npx cap sync android && npx cap open android
 ```
 
+### Google Play
+ดูขั้นตอนทั้งหมดใน **[docs/google-play.md](docs/google-play.md)** (สร้าง upload key → ใส่ GitHub Secrets → ได้ไฟล์ `.aab`)
+
 ### iPhone / Android แบบ PWA
 เปิดเว็บ (เช่นลิงก์ Render) → iPhone: Safari → แชร์ → *เพิ่มไปยังหน้าจอโฮม* · Android: Chrome จะขึ้นปุ่ม **ติดตั้ง** ที่หน้าหลัก
 แอปแบบ PWA เปิดได้แม้ไม่มีเน็ต (ข้อมูลจริงยังต้องต่อ ESP32)

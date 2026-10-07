@@ -2,3 +2,7 @@ node_modules/
 /www/
 /android/
 /ios/
+
+# signing keys — never commit
+*.jks
+upload-key*

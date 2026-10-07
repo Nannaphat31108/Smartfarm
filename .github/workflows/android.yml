@@ -1,4 +1,4 @@
-name: Build Android APK
+name: Build Android app
 
 on:
   push:
@@ -15,6 +15,9 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
+    env:
+      # true once the upload key has been added to the repo's Actions secrets
+      HAS_UPLOAD_KEY: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' }}
     steps:
       - uses: actions/checkout@v5
 
@@ -49,6 +52,39 @@ jobs:
         with:
           name: SmartFarm-apk
           path: SmartFarm.apk
+
+      # ---- Google Play: signed release bundle (runs only when the secrets exist) ----
+      - name: Build signed release (AAB + APK) for Google Play
+        if: env.HAS_UPLOAD_KEY == 'true'
+        working-directory: android
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          echo "$KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/upload.jks"
+          ./gradlew bundleRelease assembleRelease --no-daemon \
+            -Pandroid.injected.signing.store.file="$RUNNER_TEMP/upload.jks" \
+            -Pandroid.injected.signing.store.password="$KEYSTORE_PASSWORD" \
+            -Pandroid.injected.signing.key.alias="$KEY_ALIAS" \
+            -Pandroid.injected.signing.key.password="${KEY_PASSWORD:-$KEYSTORE_PASSWORD}"
+          rm -f "$RUNNER_TEMP/upload.jks"
+          mkdir -p ../play
+          cp app/build/outputs/bundle/release/app-release.aab ../play/SmartFarm-${{ github.run_number }}.aab
+          cp app/build/outputs/apk/release/app-release.apk ../play/SmartFarm-release-${{ github.run_number }}.apk
+
+      - name: Upload Google Play bundle
+        if: env.HAS_UPLOAD_KEY == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: SmartFarm-play-release
+          path: play/
+          retention-days: 30
+
+      - name: How to enable Play builds
+        if: env.HAS_UPLOAD_KEY != 'true'
+        run: echo "::notice::ยังไม่ได้ตั้ง ANDROID_KEYSTORE_BASE64 ใน Secrets — ข้ามการ build สำหรับ Google Play (ดู docs/google-play.md)"
 
       - name: Publish to the "android-latest" release
         uses: softprops/action-gh-release@v2
