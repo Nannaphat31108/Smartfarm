@@ -56,7 +56,7 @@ svg.i { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-widt
 
 .screen { padding: 22px 18px 120px; animation: fade 0.25s ease; }
 .screen.no-nav { padding-bottom: 120px; }
-@keyframes fade { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+@keyframes fade { from { opacity: 0; } to { opacity: 1; } }
 
 h1.title { font-size: 30px; font-weight: 600; margin: 8px 0 18px; line-height: 1.2; }
 h2.section { font-size: 19px; font-weight: 600; margin: 28px 0 14px; }
@@ -154,6 +154,8 @@ h2.section { font-size: 19px; font-weight: 600; margin: 28px 0 14px; }
 .nav .pill { width: 54px; height: 36px; border-radius: 999px; display: grid; place-items: center; transition: background 0.2s ease; }
 .nav .active { color: var(--primary); font-weight: 600; }
 .nav .active .pill { background: var(--primary-soft); }
+.nav-brand, .nav-foot { display: none; }
+.nav.detail { display: none; }
 
 /* ---------- Lists / cards ---------- */
 .head-row { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
@@ -358,4 +360,86 @@ h2.section { font-size: 19px; font-weight: 600; margin: 28px 0 14px; }
   .tile b { font-size: 17px; }
   .gauge .big { font-size: 60px; }
   h1.title { font-size: 26px; }
+}
+
+/* ================= Responsive: tablet ================= */
+@media (min-width: 700px) {
+  .app, .nav, .bottom-action, .sheet { max-width: 760px; }
+  .screen { padding: 32px 32px 130px; }
+  .tiles { grid-template-columns: repeat(4, 1fr); }
+  .list { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .gallery { grid-template-columns: repeat(4, 1fr); }
+  .cam-view { aspect-ratio: 16 / 10; }
+}
+
+/* ================= Responsive: desktop (sidebar) ================= */
+@media (min-width: 1024px) {
+  html, body { background: var(--bg); }
+  .app { max-width: none; box-shadow: none; }
+  .app.has-nav { padding-left: 248px; }
+
+  /* sidebar */
+  .nav, .nav.detail {
+    display: flex; flex-direction: column; gap: 4px;
+    top: 0; bottom: 0; left: 0; transform: none;
+    width: 248px; max-width: none;
+    border-radius: 0; padding: 28px 16px;
+    box-shadow: 1px 0 0 var(--line);
+  }
+  .nav-brand { display: flex; align-items: center; gap: 10px; font-size: 21px; font-weight: 600; color: var(--forest); padding: 0 12px 26px; }
+  .nav-brand svg { color: var(--primary); }
+  .nav button { flex-direction: row; justify-content: flex-start; gap: 12px; padding: 11px 12px; border-radius: 14px; font-size: 15.5px; width: 100%; transition: background 0.15s ease; }
+  .nav button:hover { background: var(--bg); }
+  .nav .pill { width: auto; height: auto; background: none !important; }
+  .nav .active, .nav .active:hover { background: var(--primary-soft); }
+  .nav-foot { display: block; margin-top: auto; padding: 12px; font-size: 13.5px; color: var(--muted); }
+
+  .screen { max-width: 1180px; margin: 0 auto; padding: 36px 48px 56px; }
+  .screen.no-nav { padding-bottom: 56px; }
+  h1.title { font-size: 32px; margin-top: 0; }
+
+  /* two-column content */
+  .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 32px; align-items: start; }
+  .cols.wide-left { grid-template-columns: 1.45fr 1fr; }
+  .col > :first-child, .col > .row-between:first-child h2 { margin-top: 0; }
+  .home-head + .cols { margin-top: 24px; }
+  .farm-card { margin-top: 0; }
+  .center-col { display: flex; flex-direction: column; align-items: stretch; }
+  .top-bar + .cols { margin-top: 24px; }
+  .halo { margin-top: 0; }
+
+  .tiles { grid-template-columns: 1fr 1fr; }
+  .list { grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); }
+  .search { max-width: 560px; }
+  .gallery { grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 12px; }
+  .cam-view { aspect-ratio: 4 / 3; }
+  .cam-controls { margin-top: 0; }
+  .chart-card svg { max-height: 340px; }
+
+  /* action button sits in the content instead of floating */
+  .bottom-action { position: static; transform: none; max-width: none; padding: 0; margin-top: 24px; background: none; }
+
+  /* sheets become centred dialogs */
+  .backdrop { align-items: center; padding: 24px; }
+  .sheet { max-width: 520px; border-radius: 28px; padding: 24px 26px; }
+  .sheet .grip { display: none; }
+  .toast { left: calc(50% + 124px); bottom: 32px; }
+
+  /* welcome: text left, illustration right */
+  .welcome {
+    display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr);
+    grid-template-rows: auto 1fr auto auto auto 1fr; column-gap: 64px;
+    padding: 48px 8vw;
+  }
+  .welcome .brand { grid-row: 1; grid-column: 1; }
+  .welcome h1 { grid-row: 3; grid-column: 1; font-size: 52px; margin: 0 0 16px; }
+  .welcome p { grid-row: 4; grid-column: 1; font-size: 19px; }
+  .welcome .btn-start { grid-row: 5; grid-column: 1; max-width: 340px; margin-top: 40px; }
+  .welcome .illus { grid-row: 1 / -1; grid-column: 2; }
+  .welcome .illus svg { max-width: 560px; }
+}
+
+@media (min-width: 1024px) and (hover: hover) {
+  .item, .tile, .cam-card, .mode, .sched, .quick button, .snap { transition: box-shadow 0.2s ease, transform 0.2s ease; }
+  button.item:hover, .tile:hover, .cam-card:hover, .quick button:hover, .snap:hover { box-shadow: 0 10px 26px rgba(31, 58, 38, 0.1); transform: translateY(-1px); }
 }

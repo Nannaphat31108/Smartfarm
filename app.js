@@ -399,7 +399,7 @@
   }
 
   /* ---------- Views ---------- */
-  function navBar() {
+  function navBar(variant = "") {
     const items = [
       ["home", "home", "หน้าหลัก"],
       ["devices", "grid", "อุปกรณ์"],
@@ -407,9 +407,10 @@
       ["camera", "camera", "กล้อง"],
       ["data", "chart", "ข้อมูล"],
     ];
-    return `<nav class="nav">${items.map(([r, i, l]) =>
-      `<button data-go="${r}" class="${ui.route === r ? "active" : ""}" aria-label="${l}"><span class="pill">${icon(i)}</span>${l}</button>`
-    ).join("")}</nav>`;
+    const current = ui.route === "light" || ui.route === "pump" ? "devices" : ui.route;
+    return `<nav class="nav ${variant}"><div class="nav-brand">${icon("leaf")}Smart Farm</div>${items.map(([r, i, l]) =>
+      `<button data-go="${r}" class="${current === r ? "active" : ""}" aria-label="${l}"><span class="pill">${icon(i)}</span>${l}</button>`
+    ).join("")}<div class="nav-foot"><span class="status-dot ${state.online ? "" : "off"}"></span>ESP32 ${state.online ? "ออนไลน์" : "ออฟไลน์"}</div></nav>`;
   }
 
   const views = {};
@@ -459,6 +460,7 @@
         <button class="icon-btn" data-action="notifications" aria-label="การแจ้งเตือน">${icon("bell")}${state.unread ? '<span class="dot"></span>' : ""}</button>
       </header>
 
+      <div class="cols"><div class="col">
       <div class="farm-card">
         <div class="loc">${icon("pin")}<div>
           <b>แปลงผักหลังบ้าน</b>
@@ -477,6 +479,7 @@
           <span class="bubble ${c}">${icon(i)}</span><b>${l}</b><small>${on ? "เปิด" : "ปิด"}</small></button>`).join("")}
       </div>
 
+      </div><div class="col">
       <div class="row-between"><h2 class="section">ค่าเซนเซอร์</h2><button class="link" data-go="data">ดูทั้งหมด</button></div>
       <div class="tiles">
         <button class="tile" data-go="data" data-metric="lux"><span class="sq c-yellow">${icon("sun")}</span><span><small>ความเข้มแสง</small><b>${fmtNum(s.lux)} lux</b></span></button>
@@ -487,6 +490,7 @@
 
       <div class="row-between"><h2 class="section">กล้อง</h2><button class="link" data-go="camera">ดูสด</button></div>
       ${camHomeCard()}
+      </div></div>
     </section>${navBar()}`;
   };
 
@@ -540,6 +544,7 @@
         <h1>ไฟปลูกต้นไม้</h1>
         <button class="icon-btn" data-action="device-menu" data-device="light" aria-label="เมนู">${icon("more")}</button>
       </div>
+      <div class="cols"><div class="col center-col">
       <div class="halo ${on ? "" : "off"}"><div class="mid"><div class="core">${icon("bulb")}</div></div></div>
       <p class="state-title">${on ? "เปิดอยู่" : "ปิดอยู่"}</p>
       <div class="state-sub">${lightAutoOffText()}</div>
@@ -547,6 +552,7 @@
         <div class="mini"><small>เปิดมาแล้ววันนี้</small><b>${fmtDuration(state.light.minutesToday)}</b></div>
         <div class="mini"><small>แสงตอนนี้</small><b>${fmtNum(state.sensors.lux)} lux</b></div>
       </div>
+      </div><div class="col">
       <h2 class="section">โหมดการทำงาน</h2>
       <div class="modes">${modes.map(([k, i, c, l]) =>
         `<button class="mode ${state.light.mode === k ? "active" : ""}" data-mode="${k}"><span class="bubble ${c}">${icon(i)}</span>${l}</button>`).join("")}
@@ -557,8 +563,9 @@
             <span class="sq c-green">${icon("clock")}</span><span><b>${r.start}–${r.end}</b><span>${DAYS[r.days]}${r.on ? "" : " · ปิดอยู่"}</span></span></button>`).join("")}
         <button class="add-dashed" data-action="add-rule" data-device="light">+ เพิ่ม</button>
       </div>
-    </section>
-    <div class="bottom-action"><button class="btn btn-outline" data-toggle="light">${icon("power")} ${on ? "ปิดไฟ" : "เปิดไฟ"}</button></div>`;
+      <div class="bottom-action"><button class="btn btn-outline" data-toggle="light">${icon("power")} ${on ? "ปิดไฟ" : "เปิดไฟ"}</button></div>
+      </div></div>
+    </section>${navBar("detail")}`;
   };
 
   function gaugeSVG(pct) {
@@ -592,6 +599,7 @@
         <h1>ปั๊มน้ำ</h1>
         <button class="icon-btn" data-action="device-menu" data-device="pump" aria-label="เมนู">${icon("more")}</button>
       </div>
+      <div class="cols"><div class="col center-col">
       ${notice}
       <div class="gauge">${gaugeSVG(s.soil)}
         <div class="center"><div class="big">${Math.round(s.soil)}<small>%</small></div><div class="cap">ความชื้นดินตอนนี้</div></div>
@@ -601,15 +609,17 @@
         <div class="val"><small>เกณฑ์รดน้ำอัตโนมัติ</small><b>ต่ำกว่า ${p.threshold}%</b></div>
         <button data-threshold="5" aria-label="เพิ่มเกณฑ์">${icon("plus")}</button>
       </div>
+      </div><div class="col">
       <div class="info-card">
         <button class="info-row" data-action="duration"><span class="sq c-green">${icon("clock")}</span><span><small>ระยะเวลารดน้ำต่อรอบ</small><b>${p.duration} นาที</b></span></button>
         <div class="info-row"><span class="sq c-blue">${icon("drop")}</span><span><small>รดน้ำล่าสุด</small><b>${lastDay} ${hhmm(p.lastRun.at)} · ${p.lastRun.min} นาที</b></span></div>
         <div class="info-row"><span class="sq c-blue">${icon("tank")}</span><span><small>น้ำในถัง</small><b>${Math.round(s.tank)}% · ${tankLvl}</b></span></div>
       </div>
-    </section>
-    <div class="bottom-action">${p.on
+      <div class="bottom-action">${p.on
       ? `<button class="btn btn-outline" data-action="pump-stop">${icon("power")} หยุดรดน้ำ</button>`
-      : `<button class="btn btn-solid" data-action="pump-now" ${s.tank < 3 ? "disabled" : ""}>${icon("drop")} รดน้ำทันที</button>`}</div>`;
+      : `<button class="btn btn-solid" data-action="pump-now" ${s.tank < 3 ? "disabled" : ""}>${icon("drop")} รดน้ำทันที</button>`}</div>
+      </div></div>
+    </section>${navBar("detail")}`;
   };
 
   views.auto = () => {
@@ -686,6 +696,7 @@
         <button class="chip ${ui.range === "day" ? "active" : ""}" data-range="day">วันนี้</button>
         <button class="chip ${ui.range === "week" ? "active" : ""}" data-range="week">7 วัน</button>
       </div>
+      <div class="cols wide-left"><div class="col">
       <div class="chart-card">
         <div class="row-between"><h3>${m.label}</h3><span class="big">${m.fmt(s[ui.metric])}</span></div>
         <div class="metric-tabs">${Object.entries(METRICS).map(([k, v]) =>
@@ -693,6 +704,7 @@
         ${chartSVG(pts, m, ui.metric)}
         <div class="axis">${axis.map((a) => `<span>${a}</span>`).join("")}</div>
       </div>
+      </div><div class="col">
       <div class="bars">
         ${bars.map(([i, c, l, v, pct, col]) => `<div class="bar-row"><span class="sq ${c}">${icon(i)}</span>
           <div class="body"><div class="top"><span>${l}</span><b>${v}</b></div>
@@ -700,6 +712,7 @@
       </div>
       <div class="tip ${dry || wet ? "warn" : ""}"><span class="sq">${icon("leaf")}</span>
         <div><b>${dry ? "ความชื้นดินต่ำกว่าเกณฑ์" : wet ? "ดินชื้นมากเกินไป" : "ความชื้นดินอยู่ในช่วงเหมาะสม"}</b><span>${nextWaterText()}</span></div></div>
+      </div></div>
     </section>${navBar()}`;
   };
 
@@ -878,13 +891,14 @@
     return `
     <section class="screen">
       <div class="head-row"><h1 class="title">กล้อง</h1><span class="meta" id="cam-status">${camStatusText()}</span></div>
+      <div class="cols wide-left"><div class="col">
       <div class="cam-view ${ui.camFull ? "full" : ""}" id="cam-view">
         ${viewInner}
         <span class="cam-badge ${live ? "live" : ""}">${live ? "● LIVE" : "หยุดชั่วคราว"}</span>
         <span class="cam-res">${RES[cam.res].split(" ")[0]}</span>
         <button class="cam-fs" data-cam="full" aria-label="เต็มจอ">${icon(ui.camFull ? "minus" : "expand")}</button>
       </div>
-
+      </div><div class="col">
       <div class="cam-controls">
         <button data-cam="${live ? "pause" : "play"}"><span class="round">${icon(live ? "pause" : "play")}</span>${live ? "หยุด" : "เล่น"}</button>
         <button data-cam="flash" class="${cam.flash ? "on" : ""}"><span class="round">${icon("zap")}</span>แฟลช${cam.flash ? "เปิด" : "ปิด"}</button>
@@ -899,6 +913,7 @@
           <button class="switch ${cam.timelapse ? "on" : ""}" data-cam="timelapse" role="switch" aria-checked="${cam.timelapse}" aria-label="ถ่ายภาพอัตโนมัติ"></button></div>
         <button class="info-row" data-cam="settings"><span class="sq c-blue">${icon("wifi")}</span><span><small>การเชื่อมต่อ</small><b>${real ? esc(CONFIG.camBase) : "ยังไม่ได้ตั้งค่า (โหมดจำลอง)"}</b></span></button>
       </div>
+      </div></div>
 
       <div class="row-between"><h2 class="section">ภาพที่บันทึก</h2><span class="meta muted" id="cam-count">${snaps.length}/${MAX_SNAPS}</span></div>
       <div class="gallery" id="cam-gallery">${camGalleryHTML()}</div>
@@ -1041,6 +1056,7 @@
     const html = (views[ui.route] || views.home)();
     const oldStream = app.querySelector("#cam-stream");
     app.innerHTML = html;
+    app.classList.toggle("has-nav", ui.route !== "welcome");
     const screen = app.firstElementChild;
     if (prevRoute === ui.route && screen) screen.style.animation = "none";
     prevRoute = ui.route;
