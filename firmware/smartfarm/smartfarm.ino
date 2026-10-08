@@ -3,7 +3,7 @@
  *
  * บอร์ด: ESP32 DevKit V1 (ESP32-WROOM-32) · Arduino IDE + ESP32 core 3.x
  * ไลบรารี (Library Manager): DHT sensor library, Adafruit Unified Sensor, BH1750 (Christopher Laws),
- *                          OneWire, DallasTemperature, ArduinoJson (v7)
+ *                          ArduinoJson (v7)
  *
  * ระบบอัตโนมัติทำงานบนบอร์ดนี้เอง — ปิดแอปหรือเน็ตหลุดก็ยังรดน้ำ/เปิดไฟตามกฎ
  * แอปเป็นแค่ตัวตั้งค่าและดูผล (ส่งกฎมาที่ POST /config)
@@ -22,8 +22,6 @@
 #include <time.h>
 #include <DHT.h>
 #include <BH1750.h>
-#include <OneWire.h>
-#include <DallasTemperature.h>
 #include <ArduinoJson.h>
 
 // ======================= ตั้งค่าที่ต้องแก้ =======================
@@ -45,7 +43,6 @@ const int SOIL_RULE_COOLDOWN_MIN = 30; // รดน้ำตามความ�
 // ขาที่ใช้ (ดูหน้า "ต่อวงจร" ในแอป)
 #define PIN_DHT 4
 #define PIN_SOIL 34
-#define PIN_DS18B20 13
 #define PIN_RELAY_LIGHT 26
 #define PIN_RELAY_PUMP 27
 #define PIN_LED 2
@@ -54,14 +51,12 @@ const int SOIL_RULE_COOLDOWN_MIN = 30; // รดน้ำตามความ�
 
 DHT dht(PIN_DHT, DHT22);
 BH1750 lightMeter;
-OneWire oneWire(PIN_DS18B20);
-DallasTemperature soilProbe(&oneWire);
 WebServer server(80);
 Preferences prefs;
 
 // ---------- state ----------
 struct Sensors {
-  float temp = NAN, hum = NAN, lux = NAN, soilTemp = NAN;
+  float temp = NAN, hum = NAN, lux = NAN;
   int soilRaw = 0;
   float soil = NAN;
 } S;
@@ -129,10 +124,6 @@ void readSensors() {
     float lx = lightMeter.readLightLevel();
     if (lx >= 0) S.lux = lx;
   }
-
-  soilProbe.requestTemperatures();
-  float st = soilProbe.getTempCByIndex(0);
-  S.soilTemp = (st == DEVICE_DISCONNECTED_C) ? NAN : st;
 }
 
 // ---------- time helpers ----------
@@ -261,7 +252,6 @@ void handleSensors() {
   setNum(doc, "hum", S.hum, 0);
   setNum(doc, "soil", S.soil, 0);
   setNum(doc, "lux", S.lux, 0);
-  setNum(doc, "soilTemp", S.soilTemp, 1);
   doc["soilRaw"] = S.soilRaw;
   doc["light"] = lightOn;
   doc["pump"] = pumpOn;
@@ -350,8 +340,6 @@ void setup() {
   Wire.begin(PIN_SDA, PIN_SCL);
   bh1750Ok = lightMeter.begin(BH1750::CONTINUOUS_HIGH_RES_MODE);
   if (!bh1750Ok) Serial.println("ไม่พบ BH1750 — ตรวจสาย SDA/SCL");
-  soilProbe.begin();
-  if (soilProbe.getDeviceCount() == 0) Serial.println("ไม่พบ DS18B20 — ตรวจสายและตัวต้านทาน 4.7k");
 
   loadConfig();
   connectWifi();
@@ -378,8 +366,8 @@ void loop() {
   if (millis() - lastRead > 2500) {  // DHT22 อ่านได้ไม่เร็วกว่า 2 วินาที
     lastRead = millis();
     readSensors();
-    Serial.printf("T=%.1f H=%.0f soil=%.0f%% (raw %d) lux=%.0f soilT=%.1f light=%d pump=%d\n",
-                  S.temp, S.hum, S.soil, S.soilRaw, S.lux, S.soilTemp, lightOn, pumpOn);
+    Serial.printf("T=%.1f H=%.0f soil=%.0f%% (raw %d) lux=%.0f light=%d pump=%d\n",
+                  S.temp, S.hum, S.soil, S.soilRaw, S.lux, lightOn, pumpOn);
   }
 
   automation();

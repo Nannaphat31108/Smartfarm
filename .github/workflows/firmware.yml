@@ -19,7 +19,7 @@ jobs:
           arduino-cli config set board_manager.additional_urls https://espressif.github.io/arduino-esp32/package_esp32_index.json
           arduino-cli core update-index
           arduino-cli core install esp32:esp32
-          arduino-cli lib install "DHT sensor library" "Adafruit Unified Sensor" "BH1750" "OneWire" "DallasTemperature" "ArduinoJson"
+          arduino-cli lib install "DHT sensor library" "Adafruit Unified Sensor" "BH1750" "ArduinoJson"
       - name: Compile main board (ESP32 DevKit)
         run: arduino-cli compile --fqbn esp32:esp32:esp32 firmware/smartfarm
       - name: Compile ESP32-CAM
