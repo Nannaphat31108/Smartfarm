@@ -35,24 +35,17 @@ const char *HOSTNAME = "smartfarm";  // เข้าได้ที่ http://sm
 const int SOIL_DRY = 3000;  // ค่า soilRaw ตอนเซนเซอร์อยู่ในอากาศ/ดินแห้งสนิท
 const int SOIL_WET = 1300;  // ค่า soilRaw ตอนจุ่มน้ำ (ถึงขีดบนของเซนเซอร์)
 
-// ถังน้ำ: ระยะจากเซนเซอร์ JSN-SR04T (ติดที่ฝาถัง) ถึงผิวน้ำ — ดูค่า tankCm
-const float TANK_EMPTY_CM = 100.0;  // ระยะตอนถังว่าง (ถึงก้นถัง)
-const float TANK_FULL_CM = 25.0;    // ระยะตอนถังเต็ม (JSN-SR04T วัดใกล้กว่า ~22 ซม. ไม่ได้)
-
 // โมดูลรีเลย์ส่วนใหญ่ทำงานเมื่อขา IN เป็น LOW
 const bool RELAY_ACTIVE_LOW = true;
 
 const int PUMP_MAX_MINUTES = 30;       // กันปั๊มทำงานนานเกินไป
 const int SOIL_RULE_COOLDOWN_MIN = 30; // รดน้ำตามความชื้นดินแล้ว รออย่างน้อยกี่นาทีก่อนรดซ้ำ
-const float TANK_MIN_PERCENT = 5.0;    // น้ำต่ำกว่านี้ไม่สั่งปั๊ม (กันปั๊มทำงานตัวเปล่า)
 // =============================================================
 
 // ขาที่ใช้ (ดูหน้า "ต่อวงจร" ในแอป)
 #define PIN_DHT 4
 #define PIN_SOIL 34
 #define PIN_DS18B20 13
-#define PIN_TRIG 18
-#define PIN_ECHO 19
 #define PIN_RELAY_LIGHT 26
 #define PIN_RELAY_PUMP 27
 #define PIN_LED 2
@@ -68,9 +61,9 @@ Preferences prefs;
 
 // ---------- state ----------
 struct Sensors {
-  float temp = NAN, hum = NAN, lux = NAN, soilTemp = NAN, tankCm = NAN;
+  float temp = NAN, hum = NAN, lux = NAN, soilTemp = NAN;
   int soilRaw = 0;
-  float soil = NAN, tank = NAN;
+  float soil = NAN;
 } S;
 
 bool lightOn = false, pumpOn = false;
@@ -106,10 +99,6 @@ void setLight(bool on) {
 }
 
 void startPump(float minutes, const char *reason) {
-  if (!isnan(S.tank) && S.tank < TANK_MIN_PERCENT) {
-    Serial.println("[pump] น้ำในถังต่ำเกินไป — ไม่สั่งปั๊ม");
-    return;
-  }
   minutes = constrain(minutes, 0.1f, (float)PUMP_MAX_MINUTES);
   if (!pumpOn) pumpStartedAt = millis();
   pumpOn = true;
@@ -126,27 +115,6 @@ void stopPump(const char *reason) {
 }
 
 // ---------- sensors ----------
-float readTankCm() {
-  float samples[3];
-  int n = 0;
-  for (int i = 0; i < 3; i++) {
-    digitalWrite(PIN_TRIG, LOW);
-    delayMicroseconds(4);
-    digitalWrite(PIN_TRIG, HIGH);
-    delayMicroseconds(20);
-    digitalWrite(PIN_TRIG, LOW);
-    unsigned long us = pulseIn(PIN_ECHO, HIGH, 30000);
-    if (us > 0) samples[n++] = us / 58.0f;
-    delay(60);
-  }
-  if (n == 0) return NAN;
-  // median-ish: sort small array
-  for (int i = 0; i < n; i++)
-    for (int j = i + 1; j < n; j++)
-      if (samples[j] < samples[i]) { float t = samples[i]; samples[i] = samples[j]; samples[j] = t; }
-  return samples[n / 2];
-}
-
 void readSensors() {
   float t = dht.readTemperature(), h = dht.readHumidity();
   if (!isnan(t)) S.temp = t;
@@ -165,11 +133,6 @@ void readSensors() {
   soilProbe.requestTemperatures();
   float st = soilProbe.getTempCByIndex(0);
   S.soilTemp = (st == DEVICE_DISCONNECTED_C) ? NAN : st;
-
-  S.tankCm = readTankCm();
-  if (!isnan(S.tankCm)) {
-    S.tank = constrain((TANK_EMPTY_CM - S.tankCm) / (TANK_EMPTY_CM - TANK_FULL_CM) * 100.0f, 0.0f, 100.0f);
-  }
 }
 
 // ---------- time helpers ----------
@@ -203,7 +166,6 @@ void automation() {
 
   // pump timer + safety
   if (pumpOn && (long)(millis() - pumpUntil) >= 0) stopPump("ครบเวลา");
-  if (pumpOn && !isnan(S.tank) && S.tank < TANK_MIN_PERCENT) stopPump("น้ำในถังหมด");
 
   struct tm now;
   bool clock = timeReady(now);
@@ -299,10 +261,8 @@ void handleSensors() {
   setNum(doc, "hum", S.hum, 0);
   setNum(doc, "soil", S.soil, 0);
   setNum(doc, "lux", S.lux, 0);
-  setNum(doc, "tank", S.tank, 0);
   setNum(doc, "soilTemp", S.soilTemp, 1);
   doc["soilRaw"] = S.soilRaw;
-  setNum(doc, "tankCm", S.tankCm, 1);
   doc["light"] = lightOn;
   doc["pump"] = pumpOn;
   doc["pumpRemaining"] = pumpOn ? (long)(pumpUntil - millis()) / 1000 : 0;
@@ -379,8 +339,6 @@ void setup() {
   pinMode(PIN_RELAY_LIGHT, OUTPUT);
   pinMode(PIN_RELAY_PUMP, OUTPUT);
   pinMode(PIN_LED, OUTPUT);
-  pinMode(PIN_TRIG, OUTPUT);
-  pinMode(PIN_ECHO, INPUT);
   analogReadResolution(12);
   analogSetPinAttenuation(PIN_SOIL, ADC_11db);
 
@@ -420,8 +378,8 @@ void loop() {
   if (millis() - lastRead > 2500) {  // DHT22 อ่านได้ไม่เร็วกว่า 2 วินาที
     lastRead = millis();
     readSensors();
-    Serial.printf("T=%.1f H=%.0f soil=%.0f%% (raw %d) lux=%.0f tank=%.0f%% (%.1fcm) soilT=%.1f light=%d pump=%d\n",
-                  S.temp, S.hum, S.soil, S.soilRaw, S.lux, S.tank, S.tankCm, S.soilTemp, lightOn, pumpOn);
+    Serial.printf("T=%.1f H=%.0f soil=%.0f%% (raw %d) lux=%.0f soilT=%.1f light=%d pump=%d\n",
+                  S.temp, S.hum, S.soil, S.soilRaw, S.lux, S.soilTemp, lightOn, pumpOn);
   }
 
   automation();

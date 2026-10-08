@@ -27,7 +27,6 @@
     bulb: '<path d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5"/><path d="M9 18h6"/><path d="M10 22h4"/>',
     refresh: '<path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/>',
     sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/>',
-    tank: '<rect x="5" y="4" width="14" height="16" rx="3"/><path d="M5 12c2.3-1.5 4.7 1.5 7 0s4.7 1.5 7 0"/>',
     clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
     home: '<path d="M4 10.5 12 4l8 6.5V19a1 1 0 0 1-1 1h-4v-6H9v6H5a1 1 0 0 1-1-1z"/>',
     grid: '<rect x="4" y="4" width="7" height="7" rx="2"/><rect x="13" y="4" width="7" height="7" rx="2"/><rect x="4" y="13" width="7" height="7" rx="2"/><rect x="13" y="13" width="7" height="7" rx="2"/>',
@@ -67,7 +66,7 @@
 
   const defaultState = () => ({
     started: false,
-    sensors: { temp: 31.2, hum: 68, soil: 46, lux: 12400, tank: 72, soilTemp: 27.5 },
+    sensors: { temp: 31.2, hum: 68, soil: 46, lux: 12400, soilTemp: 27.5 },
     online: true,
     updatedAt: Date.now(),
     light: { on: true, mode: "schedule", minutesToday: 70 },
@@ -323,7 +322,6 @@
     s.soilTemp = clamp(jitter(s.soilTemp + (s.temp - 3.5 - s.soilTemp) * 0.01, 0.1), 10, 40);
     if (state.pump.on) {
       s.soil = clamp(s.soil + 1.6 * scaled, 0, 95);
-      s.tank = clamp(s.tank - 0.25 * scaled, 0, 100);
     } else {
       s.soil = clamp(s.soil - 0.02 * scaled - Math.random() * 0.05, 0, 100);
     }
@@ -339,7 +337,7 @@
     }
   }
   function applyBoard(data) {
-    ["temp", "hum", "soil", "lux", "tank", "soilTemp"].forEach((k) => {
+    ["temp", "hum", "soil", "lux", "soilTemp"].forEach((k) => {
       if (k in data) state.sensors[k] = isNum(data[k]) ? data[k] : null; // null = sensor not connected
     });
     if (typeof data.light === "boolean") state.light.on = data.light;
@@ -357,7 +355,7 @@
     if (isNum(data.lightMinutesToday)) state.light.minutesToday = data.lightMinutesToday;
     if (isNum(data.pumpMinutesToday)) state.pump.minutesToday = data.pumpMinutesToday;
     if (["schedule", "light", "manual"].includes(data.lightMode)) state.light.mode = data.lightMode;
-    state.board = { soilRaw: data.soilRaw, tankCm: data.tankCm, clock: data.clock, rssi: data.rssi };
+    state.board = { soilRaw: data.soilRaw, clock: data.clock, rssi: data.rssi };
     state.updatedAt = Date.now();
   }
 
@@ -404,7 +402,7 @@
 
       // soil rule
       const soilRule = state.rules.find((r) => r.kind === "soil" && r.on);
-      if (soilRule && !state.pump.on && s.soil < state.pump.threshold && s.tank > 5) {
+      if (soilRule && !state.pump.on && s.soil < state.pump.threshold) {
         startPump(state.pump.duration, `ดินแห้ง (${rnd(s.soil)}%) เริ่มรดน้ำอัตโนมัติ`);
       }
     }
@@ -415,10 +413,6 @@
       if (t && isNum(s.temp) && s.temp > t.value && Date.now() - (state.lastFired.temp || 0) > 30 * 60000) {
         state.lastFired.temp = Date.now();
         notify("temp", `อุณหภูมิสูง ${fmt1(s.temp)}°C`);
-      }
-      if (isNum(s.tank) && s.tank < 20 && Date.now() - (state.lastFired.tank || 0) > 60 * 60000) {
-        state.lastFired.tank = Date.now();
-        notify("tank", `น้ำในถังเหลือ ${rnd(s.tank)}%`);
       }
     }
 
@@ -536,7 +530,7 @@
       <div class="row-between"><h2 class="section">ค่าเซนเซอร์</h2><button class="link" data-go="data">ดูทั้งหมด</button></div>
       <div class="tiles">
         <button class="tile" data-go="data" data-metric="lux"><span class="sq c-yellow">${icon("sun")}</span><span><small>ความเข้มแสง</small><b>${fmtNum(s.lux)} lux</b></span></button>
-        <button class="tile" data-go="pump"><span class="sq c-blue">${icon("tank")}</span><span><small>น้ำในถัง</small><b>${rnd(s.tank)}%</b></span></button>
+        <button class="tile" data-go="pump"><span class="sq c-blue">${icon("drop")}</span><span><small>รดน้ำล่าสุด</small><b>${state.pump.on ? "กำลังรด" : hhmm(state.pump.lastRun.at)}</b></span></button>
         <button class="tile" data-go="data"><span class="sq c-orange">${icon("thermo")}</span><span><small>อุณหภูมิดิน</small><b>${fmt1(s.soilTemp)}°C</b></span></button>
         <button class="tile" data-go="pump"><span class="sq c-green">${icon("clock")}</span><span><small>รดน้ำวันนี้</small><b>${Math.round(state.pump.minutesToday)} นาที</b></span></button>
       </div>
@@ -557,7 +551,6 @@
       { id: "dht", type: "sensor", name: "อุณหภูมิ/ความชื้นอากาศ", sub: "DHT22 · GPIO4", icon: "thermo", c: "c-orange", value: `${fmt1(s.temp)}°C`, metric: "temp" },
       { id: "lux", type: "sensor", name: "ความเข้มแสง", sub: "BH1750 · I2C", icon: "sun", c: "c-yellow", value: `${fmtNum(s.lux)} lux`, metric: "lux" },
       { id: "ds18b20", type: "sensor", name: "อุณหภูมิดิน", sub: "DS18B20 · GPIO13", icon: "thermo", c: "c-orange", value: `${fmt1(s.soilTemp)}°C` },
-      { id: "tank", type: "sensor", name: "ระดับน้ำในถัง", sub: "JSN-SR04T", icon: "tank", c: "c-blue", value: `${rnd(s.tank)}%`, go: "pump" },
       { id: "cam", type: "sensor", name: "กล้องแปลงผัก", sub: "ESP32-CAM · OV2640", icon: "camera", c: "c-green", value: CONFIG.camBase ? "LIVE" : "จำลอง", go: "camera" },
     ];
   }
@@ -579,7 +572,7 @@
 
   views.devices = () => `
     <section class="screen">
-      <div class="head-row"><h1 class="title">อุปกรณ์</h1><span class="meta">ต่อกับ ESP32 · 8 ชิ้น</span></div>
+      <div class="head-row"><h1 class="title">อุปกรณ์</h1><span class="meta">ต่อกับ ESP32 · 7 ชิ้น</span></div>
       <button class="guide-link" data-go="guide">${icon("book")} วิธีต่อวงจรและรายการอุปกรณ์ ${icon("arrow")}</button>
       <label class="search">${icon("search", 'style="color:#4b544e"')}<input id="dev-search" type="search" placeholder="ค้นหาอุปกรณ์" value="${esc(ui.devQuery)}" autocomplete="off"></label>
       <div class="chips">
@@ -647,7 +640,6 @@
         ? `<div class="notice warn">${icon("drop")} ดินแห้ง ควรรดน้ำ</div>`
         : `<div class="notice">${icon("drop")} ความชื้นพอ ยังไม่ต้องรดน้ำ</div>`;
     const lastDay = new Date(p.lastRun.at).toDateString() === new Date().toDateString() ? "วันนี้" : "เมื่อวาน";
-    const tankLvl = !isNum(s.tank) ? "ไม่มีข้อมูล" : s.tank < 20 ? "ใกล้หมด" : s.tank < 40 ? "ค่อนข้างต่ำ" : "ระดับปกติ";
     return `
     <section class="screen no-nav">
       <div class="top-bar">
@@ -669,11 +661,10 @@
       <div class="info-card">
         <button class="info-row" data-action="duration"><span class="sq c-green">${icon("clock")}</span><span><small>ระยะเวลารดน้ำต่อรอบ</small><b>${p.duration} นาที</b></span></button>
         <div class="info-row"><span class="sq c-blue">${icon("drop")}</span><span><small>รดน้ำล่าสุด</small><b>${lastDay} ${hhmm(p.lastRun.at)} · ${p.lastRun.min} นาที</b></span></div>
-        <div class="info-row"><span class="sq c-blue">${icon("tank")}</span><span><small>น้ำในถัง</small><b>${rnd(s.tank)}% · ${tankLvl}</b></span></div>
       </div>
       <div class="bottom-action">${p.on
       ? `<button class="btn btn-outline" data-action="pump-stop">${icon("power")} หยุดรดน้ำ</button>`
-      : `<button class="btn btn-solid" data-action="pump-now" ${s.tank < 3 ? "disabled" : ""}>${icon("drop")} รดน้ำทันที</button>`}</div>
+      : `<button class="btn btn-solid" data-action="pump-now">${icon("drop")} รดน้ำทันที</button>`}</div>
       </div></div>
     </section>${navBar("detail")}`;
   };
@@ -741,7 +732,6 @@
       ["thermo", "c-orange", "อุณหภูมิอากาศ", `${fmt1(s.temp)}°C`, (s.temp - 15) / 35, "#b05a2a"],
       ["drop", "c-blue", "ความชื้นอากาศ", `${rnd(s.hum)}%`, s.hum / 100, "#3a6fb5"],
       ["sun", "c-yellow", "ความเข้มแสง", `${fmtNum(s.lux)} lux`, s.lux / 23000, "#8a6420"],
-      ["tank", "c-blue", "น้ำในถัง", `${rnd(s.tank)}%`, s.tank / 100, "#3a6fb5"],
       ["thermo", "c-orange", "อุณหภูมิดิน", `${fmt1(s.soilTemp)}°C`, (s.soilTemp - 10) / 35, "#b05a2a"],
     ];
     const dry = isNum(s.soil) && s.soil < state.pump.threshold, wet = isNum(s.soil) && s.soil > 80;
@@ -1124,9 +1114,6 @@
     { id: "ds18b20", name: "DS18B20 อุณหภูมิดิน (แบบสายกันน้ำ)", icon: "thermo", c: "c-orange", left: "DS18B20", right: "ESP32",
       rows: [["แดง VDD", "3V3", W.red], ["เหลือง DATA", "GPIO 13", W.yellow, "4.7k→3V3"], ["ดำ GND", "GND", W.black]],
       note: "<b>ต้องมีตัวต้านทาน 4.7kΩ ต่อระหว่างสาย DATA กับ 3V3</b> (pull-up) ไม่งั้นอ่านค่าไม่ได้ · สายบางรุ่นใช้สีขาว/น้ำเงินแทนเหลือง" },
-    { id: "jsn", name: "JSN-SR04T วัดระดับน้ำในถัง", icon: "tank", c: "c-blue", left: "JSN-SR04T", right: "ESP32",
-      rows: [["5V", "VIN (5V)", W.red], ["Trig", "GPIO 18", W.orange], ["Echo", "GPIO 19", W.gray, "1k / 2k"], ["GND", "GND", W.black]],
-      note: "<b>Echo ออกมา 5V แต่ ESP32 รับได้ 3.3V</b> — ต่อตัวแบ่งแรงดัน: Echo → 1kΩ → GPIO 19 และ GPIO 19 → 2kΩ → GND · ติดหัววัดที่ฝาถังหันลงผิวน้ำ ห่างผิวน้ำตอนเต็มอย่างน้อย 25 ซม." },
     { id: "relay", name: "โมดูลรีเลย์ 2 ช่อง (ฝั่งควบคุม)", icon: "power", c: "c-green", left: "Relay", right: "ESP32",
       rows: [["VCC", "VIN (5V)", W.red], ["GND", "GND", W.black], ["IN1 (ไฟ)", "GPIO 26", W.blue], ["IN2 (ปั๊ม)", "GPIO 27", W.green]],
       note: "โมดูลส่วนใหญ่ทำงานเมื่อ IN เป็น LOW (ในโค้ดตั้ง RELAY_ACTIVE_LOW = true) · ถ้าสั่งเปิดแล้วกลับเป็นปิด ให้เปลี่ยนเป็น false" },
@@ -1147,14 +1134,13 @@
     ["Capacitive Soil Moisture Sensor v1.2", 1, 40, "แบบ capacitive ไม่ผุกร่อนเหมือนแบบเข็ม"],
     ["BH1750 (GY-302)", 1, 50, "วัดแสง lux"],
     ["DS18B20 แบบสายกันน้ำ 1 ม.", 1, 50, "อุณหภูมิดิน"],
-    ["JSN-SR04T (กันน้ำ)", 1, 180, "วัดระดับน้ำในถัง"],
     ["โมดูลรีเลย์ 5V 2 ช่อง (มี optocoupler)", 1, 45, "สั่งไฟปลูก/ปั๊ม"],
     ["ปั๊มน้ำ DC 12V (เช่น 385 / ไดอะแฟรม)", 1, 150, "พร้อมสายยาง"],
     ["ไฟปลูกต้นไม้ LED 12V", 1, 200, "หรือแถบ LED full spectrum"],
     ["อะแดปเตอร์ 12V 3A + แจ็ค DC ตัวเมีย", 1, 150, "จ่ายไฟทั้งระบบ"],
     ["LM2596 step-down (ปรับได้)", 1, 40, "แปลง 12V → 5V"],
     ["ESP32-CAM + บอร์ด ESP32-CAM-MB", 1, 250, "กล้อง (ไม่บังคับ)"],
-    ["ตัวต้านทาน 1kΩ, 2kΩ, 4.7kΩ (10kΩ ถ้า DHT22 ตัวเปล่า)", 1, 20, "ตัวแบ่งแรงดัน / pull-up"],
+    ["ตัวต้านทาน 4.7kΩ (และ 10kΩ ถ้า DHT22 เป็นตัวเปล่า)", 1, 10, "pull-up"],
     ["ไดโอด 1N4007", 1, 5, "กันไฟย้อนจากปั๊ม"],
     ["กล่องกันน้ำ IP65 + เคเบิลแกลนด์", 1, 120, "ใส่บอร์ดและรีเลย์"],
     ["สายจัมเปอร์, เทอร์มินอลบล็อก, PCB อเนกประสงค์, ท่อหด", 1, 100, ""],
@@ -1169,7 +1155,6 @@
     ["ต่อ DHT22 และ BH1750", "ต่อตามแท็บ <b>ต่อทีละชิ้น</b> → รีเซ็ตบอร์ด → Serial Monitor ต้องเห็นค่า T, H และ lux (ถ้าขึ้น “ไม่พบ BH1750” ให้สลับ SDA/SCL)"],
     ["ต่อเซนเซอร์ความชื้นดิน + คาลิเบรต", "ดูค่า <code>raw</code> ใน Serial Monitor: ตอนถืออยู่ในอากาศ → ใส่ใน <code>SOIL_DRY</code> · ตอนจุ่มน้ำถึงขีด → ใส่ใน <code>SOIL_WET</code> แล้วอัปโหลดใหม่"],
     ["ต่อ DS18B20", "อย่าลืมตัวต้านทาน 4.7kΩ ระหว่าง DATA กับ 3V3 · ถ้าไม่ได้ต่อเซนเซอร์นี้ แอปจะแสดง “–” ที่อุณหภูมิดิน"],
-    ["ต่อ JSN-SR04T + ตั้งค่าถัง", "ต่อตัวแบ่งแรงดัน 1k/2k ที่ขา Echo · วัดระยะตอนถังว่าง → <code>TANK_EMPTY_CM</code> และตอนเต็ม → <code>TANK_FULL_CM</code> (ดูค่า cm ใน Serial Monitor)"],
     ["ทดสอบรีเลย์ (ยังไม่ต่อโหลด)", "ต่อฝั่งควบคุมของรีเลย์ → ในแอปกดเปิด/ปิดไฟและปั๊ม ต้องได้ยินเสียงคลิกและไฟ LED บนโมดูลติด"],
     ["ต่อไฟปลูกและปั๊ม 12V", "ถอดปลั๊กอะแดปเตอร์ก่อนต่อ · ต่อตามแท็บต่อทีละชิ้น (ฝั่งกำลัง) · ใส่ไดโอด 1N4007 คร่อมปั๊ม · ทดสอบสั่งจากแอปอีกครั้ง"],
     ["เชื่อมแอปกับบอร์ด", "หน้า ไฟปลูก/ปั๊มน้ำ → เมนู ⋮ → <b>ตั้งค่าการเชื่อมต่อ ESP32</b> ใส่ <code>http://IP-ของบอร์ด</code> · แอปจะส่งกฎอัตโนมัติไปเก็บที่บอร์ดเอง (ปิดแอปแล้วบอร์ดก็ยังรดน้ำตามกฎ)"],
@@ -1177,7 +1162,7 @@
     ["ใส่กล่องและติดตั้งหน้างาน", "ใส่บอร์ด รีเลย์ LM2596 ในกล่องกันน้ำ ร้อยสายผ่านเคเบิลแกลนด์ · วางกล่องให้สูงจากพื้น ไม่โดนน้ำจากการรดน้ำ · DHT22 ควรอยู่ในที่ร่ม อากาศถ่ายเทได้"],
   ];
 
-  let guideDone = localGet("sf.guideDone", []);
+  let guideDone = localGet("sf.guideDone2", []);
   const guideProgress = () => `${guideDone.length}/${STEPS.length}`;
 
   function wireSVG(w) {
@@ -1208,8 +1193,8 @@
     const wire = (d, col, label, lx, ly, anchor = "middle") =>
       `<path d="${d}" fill="none" stroke="${col}" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
        ${label ? `<text x="${lx}" y="${ly}" text-anchor="${anchor}" class="ov-l">${label}</text>` : ""}`;
-    const sensors = [["DHT22", "GPIO 4", 40], ["Soil Moisture", "GPIO 34", 130], ["BH1750", "SDA 21 · SCL 22", 220], ["DS18B20", "GPIO 13 (+4.7k)", 310], ["JSN-SR04T", "Trig 18 · Echo 19", 400]];
-    return `<svg class="ov-svg" viewBox="0 0 900 600" role="img" aria-label="แผนผังวงจรรวม">
+    const sensors = [["DHT22", "GPIO 4", 40], ["Soil Moisture", "GPIO 34", 130], ["BH1750", "SDA 21 · SCL 22", 220], ["DS18B20", "GPIO 13 (+4.7k)", 310]];
+    return `<svg class="ov-svg" viewBox="0 0 900 575" role="img" aria-label="แผนผังวงจรรวม">
       ${wire("M105 110 V200", W.red, "12V", 114, 162, "start")}
       ${wire("M190 235 H300", W.red, "5V → VIN", 245, 226)}
       ${wire("M60 110 H40 V405 H20", W.red, "12V → COM1, COM2", 48, 320, "start")}
@@ -1220,14 +1205,13 @@
       ${sensors.map(([, pin, y]) => wire(`M520 ${y + 35} H640`, W.yellow, pin, 580, y + 26)).join("")}
       ${box(20, 40, 170, 70, "อะแดปเตอร์ 12V", "3A")}
       ${box(20, 200, 170, 70, "LM2596", "12V → 5V")}
-      ${box(300, 30, 220, 445, "ESP32", "DevKit V1", "esp")}
+      ${box(300, 30, 220, 380, "ESP32", "DevKit V1", "esp")}
       ${box(20, 360, 170, 90, "รีเลย์ 2 ช่อง", "5V")}
       ${box(10, 500, 110, 64, "ไฟปลูก", "12V")}
       ${box(130, 500, 110, 64, "ปั๊มน้ำ", "12V + 1N4007")}
       ${sensors.map(([n, , y]) => box(640, y, 240, 70, n, "")).join("")}
-      <text x="760" y="510" text-anchor="middle" class="ov-s">เซนเซอร์ใช้ 3V3 + GND ร่วม</text>
-      <text x="760" y="532" text-anchor="middle" class="ov-s">(JSN-SR04T ใช้ 5V)</text>
-      <text x="410" y="505" text-anchor="middle" class="ov-s">GND ทุกตัวต่อรวมกัน</text>
+      <text x="760" y="420" text-anchor="middle" class="ov-s">เซนเซอร์ทุกตัวใช้ 3V3 + GND ร่วม</text>
+      <text x="410" y="440" text-anchor="middle" class="ov-s">GND ทุกตัวต่อรวมกัน</text>
     </svg>`;
   }
 
@@ -1244,7 +1228,7 @@
     const b = state.board, s = state.sensors;
     const cell = (l, v) => `<div><small>${l}</small><b>${v}</b></div>`;
     return `<div class="live-grid">
-      ${cell("soilRaw (ดิน)", isNum(b.soilRaw) ? b.soilRaw : "–")}${cell("ระยะถึงน้ำ", isNum(b.tankCm) ? `${b.tankCm} cm` : "–")}
+      ${cell("soilRaw (ดิน)", isNum(b.soilRaw) ? b.soilRaw : "–")}${cell("ความชื้นดิน", `${rnd(s.soil)}%`)}
       ${cell("อุณหภูมิ", `${fmt1(s.temp)}°C`)}${cell("แสง", `${fmtNum(s.lux)} lux`)}
       ${cell("อุณหภูมิดิน", `${fmt1(s.soilTemp)}°C`)}${cell("เวลาบนบอร์ด", b.clock ? "ซิงก์แล้ว" : "ยังไม่ซิงก์")}
     </div>`;
@@ -1261,7 +1245,7 @@
         <div class="guide-card"><div class="row-between"><h3>แผนผังรวม</h3><button class="link" data-guide="zoom">ขยาย</button></div>
           <div class="ov-wrap" data-guide="zoom">${overviewSVG()}</div></div>
         <div class="guide-card"><h3>ตารางขาที่ใช้</h3>${pinTable()}
-          <p class="muted small">ไฟเลี้ยง: เซนเซอร์ทุกตัวใช้ <b>3V3</b> ยกเว้น JSN-SR04T และรีเลย์ใช้ <b>VIN (5V)</b> · GND ต่อรวมกันทั้งหมด</p></div>`;
+          <p class="muted small">ไฟเลี้ยง: เซนเซอร์ทุกตัวใช้ <b>3V3</b> ส่วนรีเลย์ใช้ <b>VIN (5V)</b> · GND ต่อรวมกันทั้งหมด</p></div>`;
     } else if (tab === "wiring") {
       body = `<div class="legend">${[["แดง", W.red, "ไฟ +"], ["ดำ", W.black, "GND"], ["สีอื่น", W.yellow, "สัญญาณ"]].map(([, c, l]) =>
           `<span><i style="background:${c}"></i>${l}</span>`).join("")}</div>
@@ -1288,7 +1272,6 @@
           <table class="pin-table"><tbody>
             <tr><td><code>WIFI_SSID / WIFI_PASS</code></td><td>ชื่อและรหัส Wi-Fi (2.4GHz เท่านั้น)</td></tr>
             <tr><td><code>SOIL_DRY / SOIL_WET</code></td><td>ค่า soilRaw ตอนแห้ง / ตอนจุ่มน้ำ</td></tr>
-            <tr><td><code>TANK_EMPTY_CM / TANK_FULL_CM</code></td><td>ระยะถึงผิวน้ำตอนถังว่าง / เต็ม</td></tr>
             <tr><td><code>RELAY_ACTIVE_LOW</code></td><td>true สำหรับโมดูลรีเลย์ทั่วไป</td></tr>
           </tbody></table></div>
         <div class="guide-card"><h3>ค่าดิบจากบอร์ด (สำหรับคาลิเบรต)</h3><div id="guide-live">${guideLiveHTML()}</div></div>
@@ -1325,7 +1308,7 @@
     if (d.step !== undefined) {
       const i = Number(d.step);
       guideDone = guideDone.includes(i) ? guideDone.filter((x) => x !== i) : [...guideDone, i];
-      localSet("sf.guideDone", guideDone);
+      localSet("sf.guideDone2", guideDone);
       return render();
     }
     if (d.guide === "zoom") {
@@ -1507,7 +1490,7 @@
   }
 
   function notificationsSheet() {
-    const map = { pump: ["drop", "c-blue"], temp: ["thermo", "c-orange"], tank: ["tank", "c-blue"] };
+    const map = { pump: ["drop", "c-blue"], temp: ["thermo", "c-orange"] };
     const list = state.notifications.map((n) => {
       const [i, c] = map[n.type] || ["bell", "c-green"];
       return `<div class="notif"><span class="sq ${c}">${icon(i)}</span><div><b>${esc(n.text)}</b><span>${hhmm(n.at)} · ${new Date(n.at).toLocaleDateString("th-TH", { day: "numeric", month: "short" })}</span></div></div>`;
