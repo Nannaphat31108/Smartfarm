@@ -337,6 +337,76 @@ h2.section { font-size: 19px; font-weight: 600; margin: 28px 0 14px; }
 .snap span { position: absolute; left: 0; right: 0; bottom: 0; padding: 2px 6px; font-size: 11px; color: #fff; background: linear-gradient(transparent, rgba(0, 0, 0, 0.6)); text-align: left; }
 .snap-full { width: 100%; border-radius: 16px; display: block; margin-bottom: 6px; }
 
+/* ---------- Wiring guide ---------- */
+.guide-entry { margin-top: 14px; }
+.guide-link { display: flex; align-items: center; gap: 8px; width: 100%; margin: -6px 0 14px; padding: 12px 14px; border-radius: 16px; background: var(--primary-soft); color: var(--forest); font-weight: 500; font-size: 14.5px; text-align: left; }
+.guide-link svg { width: 18px; height: 18px; }
+.guide-link svg:last-child { margin-left: auto; color: var(--primary); }
+.guide-tabs { margin: 18px 0 14px; }
+.guide .chip { height: 42px; padding: 0 18px; font-size: 15px; }
+.guide-card { background: #fff; border-radius: 22px; padding: 16px; box-shadow: var(--shadow); margin-bottom: 14px; }
+.guide-card h3 { margin: 0 0 10px; font-size: 16.5px; font-weight: 600; }
+.guide .tip { margin: 0 0 14px; }
+.small { font-size: 13.5px; line-height: 1.6; }
+.small b, .steps p b { font-weight: 600; color: var(--text); }
+code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.86em; background: var(--bg); padding: 1px 6px; border-radius: 6px; word-break: break-word; }
+
+.ov-wrap { cursor: zoom-in; }
+.ov-svg { width: 100%; height: auto; display: block; }
+.ov-zoom { overflow-x: auto; margin: 0 -18px 8px; padding: 0 18px; }
+.ov-zoom .ov-svg { width: 900px; max-width: none; }
+.ov-box { fill: #f6f9f7; stroke: #cfdcd2; stroke-width: 2; }
+.ov-box.esp { fill: #e3efe6; stroke: var(--primary); }
+.ov-t { font: 600 20px Kanit, sans-serif; fill: var(--text); }
+.ov-s { font: 400 15px Kanit, sans-serif; fill: var(--muted); }
+.ov-l { font: 500 14px Kanit, sans-serif; fill: var(--forest); paint-order: stroke; stroke: #fff; stroke-width: 4px; }
+
+.pin-table { width: 100%; border-collapse: collapse; font-size: 14.5px; }
+.pin-table th { text-align: left; font-weight: 500; color: var(--muted); font-size: 13px; padding: 6px 8px; border-bottom: 1px solid var(--line); }
+.pin-table td { padding: 9px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+.pin-table tr:last-child td { border-bottom: 0; }
+.pin-table td b { font-weight: 600; }
+.pin-table.parts td:last-child { white-space: nowrap; text-align: right; color: var(--forest); }
+.pin-table .total td { font-weight: 600; border-top: 2px solid var(--line); }
+
+.legend { display: flex; gap: 16px; flex-wrap: wrap; font-size: 13.5px; color: var(--muted); margin-bottom: 12px; }
+.legend i { display: inline-block; width: 18px; height: 5px; border-radius: 3px; margin-right: 6px; vertical-align: middle; }
+.wire-grid { display: grid; gap: 14px; }
+.wire-card { margin: 0; }
+.wire-head { display: flex; align-items: center; gap: 12px; margin-bottom: 8px; }
+.wire-head h3 { margin: 0; }
+.wire-head .sq { width: 40px; height: 40px; border-radius: 12px; display: grid; place-items: center; flex: none; }
+.wire-head .sq svg { width: 19px; height: 19px; }
+.wire-svg { width: 100%; max-width: 420px; height: auto; display: block; margin: 0 auto; }
+.wire-svg .box { fill: #f6f9f7; stroke: #d5e0d8; stroke-width: 1.5; }
+.wire-svg .box.esp { fill: #e3efe6; stroke: #b7d3bd; }
+.wire-svg .box-t { font: 600 13.5px Kanit, sans-serif; fill: var(--text); }
+.wire-svg .pin { font: 500 12.5px Kanit, sans-serif; fill: var(--text); }
+.wire-svg .part { fill: #fff8e6; stroke: #d9a514; stroke-width: 1.5; }
+.wire-svg .part-t { font: 600 10.5px Kanit, sans-serif; fill: #7a5b0c; }
+.wire-card p { margin: 8px 0 0; color: var(--muted); }
+
+.progress-row { background: #fff; border-radius: 18px; padding: 14px 16px; box-shadow: var(--shadow); margin-bottom: 14px; }
+.steps { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 10px; }
+.steps li { background: #fff; border-radius: 18px; padding: 14px; display: flex; gap: 14px; box-shadow: var(--shadow); }
+.steps li b { font-weight: 600; }
+.steps p { margin: 4px 0 0; font-size: 14px; color: var(--muted); line-height: 1.65; }
+.steps li.done { opacity: 0.6; }
+.step-check { width: 34px; height: 34px; border-radius: 50%; border: 2px solid #b7d3bd; color: var(--primary); font-weight: 600; flex: none; display: grid; place-items: center; }
+.steps li.done .step-check { background: var(--primary); border-color: var(--primary); color: #fff; }
+
+.file-link { display: flex; align-items: center; gap: 12px; padding: 10px 0; color: var(--text); text-decoration: none; border-bottom: 1px solid var(--line); }
+.file-link:last-child { border-bottom: 0; }
+.file-link svg { color: var(--primary); }
+.file-link b { display: block; font-weight: 600; }
+.file-link small { color: var(--muted); }
+.live-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.live-grid div { background: var(--bg); border-radius: 14px; padding: 10px 12px; }
+.live-grid small { display: block; color: var(--muted); font-size: 12.5px; }
+.live-grid b { font-weight: 600; }
+
+.nav .nav-extra { display: none; }
+
 /* ---------- Sheet / toast ---------- */
 .backdrop { position: fixed; inset: 0; background: rgba(15, 30, 20, 0.4); z-index: 50; display: flex; align-items: flex-end; justify-content: center; animation: fadeIn 0.2s ease; }
 @keyframes fadeIn { from { opacity: 0; } }
@@ -379,6 +449,7 @@ h2.section { font-size: 19px; font-weight: 600; margin: 28px 0 14px; }
   .list { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
   .gallery { grid-template-columns: repeat(4, 1fr); }
   .cam-view { aspect-ratio: 16 / 10; }
+  .wire-grid { grid-template-columns: 1fr 1fr; }
 }
 
 /* ================= Responsive: desktop (sidebar) ================= */
@@ -402,6 +473,10 @@ h2.section { font-size: 19px; font-weight: 600; margin: 28px 0 14px; }
   .nav .pill { width: auto; height: auto; background: none !important; }
   .nav .active, .nav .active:hover { background: var(--primary-soft); }
   .nav-foot { display: block; margin-top: auto; padding: 12px; font-size: 13.5px; color: var(--muted); }
+  .nav .nav-extra { display: flex; margin-top: 10px; border-top: 1px solid var(--line); border-radius: 0 0 14px 14px; padding-top: 14px; }
+  .nav .nav-extra.active { border-radius: 14px; }
+  .wire-grid { grid-template-columns: 1fr 1fr; }
+  .screen.guide { max-width: 1180px; }
 
   .screen { max-width: 1180px; margin: 0 auto; padding: 36px 48px 56px; }
   .screen.no-nav { padding-bottom: 56px; }
