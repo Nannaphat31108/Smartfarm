@@ -14,7 +14,8 @@
 
 | อุปกรณ์ | ขาอุปกรณ์ | ESP32 | หมายเหตุ |
 |---|---|---|---|
-| DHT22 | + / OUT / − | 3V3 / **GPIO 4** / GND | ตัวเปล่า 4 ขา ใส่ 10kΩ ระหว่าง VCC–DATA |
+| SHT40 (ตัวหลัก) | VIN / GND / SCL / SDA | 3V3 / GND / **GPIO 22** / **GPIO 21** | ใช้บัส I2C ร่วมกับ BH1750 |
+| DHT22 (ตัวสำรอง) | + / OUT / − | 3V3 / **GPIO 4** / GND | ตัวเปล่า 4 ขา ใส่ 10kΩ ระหว่าง VCC–DATA · ไม่มีก็ได้ |
 | Soil Capacitive v1.2 | VCC / AOUT / GND | 3V3 / **GPIO 34** / GND | ADC1 ใช้ได้ขณะเปิด Wi-Fi |
 | BH1750 | VCC / GND / SCL / SDA | 3V3 / GND / **GPIO 22** / **GPIO 21** | ADDR ไม่ต่อ |
 | รีเลย์ 2 ช่อง | VCC / GND / IN1 / IN2 | VIN / GND / **GPIO 26** / **GPIO 27** | IN1 = ไฟปลูก, IN2 = ปั๊ม |
@@ -28,5 +29,5 @@
 ## โค้ด
 - `firmware/smartfarm/smartfarm.ino` — ESP32 ตัวหลัก (ระบบอัตโนมัติทำงานบนบอร์ด แม้ปิดแอป)
 - `firmware/esp32cam/esp32cam.ino` — กล้อง
-- ไลบรารี: DHT sensor library, Adafruit Unified Sensor, BH1750, ArduinoJson
+- ไลบรารี: Adafruit SHT4x Library, DHT sensor library, Adafruit Unified Sensor, BH1750, ArduinoJson
 - ทดสอบคอมไพล์กับ ESP32 Arduino core 3.3 (GitHub Actions คอมไพล์ให้ทุกครั้งที่แก้โค้ด)

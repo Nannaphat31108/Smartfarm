@@ -2,8 +2,11 @@
  * Smart Farm — ESP32 ตัวหลัก (เซนเซอร์ + รีเลย์ + ระบบอัตโนมัติ)
  *
  * บอร์ด: ESP32 DevKit V1 (ESP32-WROOM-32) · Arduino IDE + ESP32 core 3.x
- * ไลบรารี (Library Manager): DHT sensor library, Adafruit Unified Sensor, BH1750 (Christopher Laws),
- *                          ArduinoJson (v7)
+ * ไลบรารี (Library Manager): Adafruit SHT4x Library, DHT sensor library, Adafruit Unified Sensor,
+ *                          BH1750 (Christopher Laws), ArduinoJson (v7)
+ *
+ * อุณหภูมิ/ความชื้นอากาศ: ใช้ SHT40 เป็นตัวหลัก (แม่นกว่า) ถ้าไม่พบหรืออ่านไม่ได้จะใช้ DHT22 แทนอัตโนมัติ
+ * ต่อแค่ตัวใดตัวหนึ่งก็ได้
  *
  * ระบบอัตโนมัติทำงานบนบอร์ดนี้เอง — ปิดแอปหรือเน็ตหลุดก็ยังรดน้ำ/เปิดไฟตามกฎ
  * แอปเป็นแค่ตัวตั้งค่าและดูผล (ส่งกฎมาที่ POST /config)
@@ -21,6 +24,7 @@
 #include <Wire.h>
 #include <time.h>
 #include <DHT.h>
+#include <Adafruit_SHT4x.h>
 #include <BH1750.h>
 #include <ArduinoJson.h>
 
@@ -69,6 +73,9 @@ bool hasWateredBySoil = false;
 float lightMinutesToday = 0, pumpMinutesToday = 0;
 int counterDay = -1;
 bool bh1750Ok = false;
+bool sht40Ok = false;
+Adafruit_SHT4x sht4;
+float shtT = NAN, shtH = NAN, dhtT = NAN, dhtH = NAN;
 
 // กฎอัตโนมัติ (ค่าเริ่มต้นเหมือนในแอป)
 JsonDocument config;
@@ -111,9 +118,20 @@ void stopPump(const char *reason) {
 
 // ---------- sensors ----------
 void readSensors() {
+  // SHT40 (หลัก) + DHT22 (สำรอง)
+  shtT = shtH = NAN;
+  if (sht40Ok) {
+    sensors_event_t hum, temp;
+    if (sht4.getEvent(&hum, &temp)) {
+      shtT = temp.temperature;
+      shtH = hum.relative_humidity;
+    }
+  }
   float t = dht.readTemperature(), h = dht.readHumidity();
-  if (!isnan(t)) S.temp = t;
-  if (!isnan(h)) S.hum = h;
+  if (!isnan(t)) dhtT = t;
+  if (!isnan(h)) dhtH = h;
+  S.temp = !isnan(shtT) ? shtT : dhtT;
+  S.hum = !isnan(shtH) ? shtH : dhtH;
 
   long sum = 0;
   for (int i = 0; i < 10; i++) { sum += analogRead(PIN_SOIL); delay(2); }
@@ -241,7 +259,8 @@ void sendError(int code, const char *msg) {
   doc["error"] = msg;
   sendJson(code, doc);
 }
-void setNum(JsonDocument &doc, const char *k, float v, int decimals) {
+template <typename T>
+void setNum(T &&doc, const char *k, float v, int decimals) {
   if (isnan(v)) doc[k] = nullptr;
   else doc[k] = roundf(v * powf(10, decimals)) / powf(10, decimals);
 }
@@ -253,6 +272,13 @@ void handleSensors() {
   setNum(doc, "soil", S.soil, 0);
   setNum(doc, "lux", S.lux, 0);
   doc["soilRaw"] = S.soilRaw;
+  doc["tempSource"] = !isnan(shtT) ? "sht40" : (!isnan(dhtT) ? "dht22" : nullptr);
+  JsonObject sht = doc["sht40"].to<JsonObject>();
+  setNum(sht, "temp", shtT, 1);
+  setNum(sht, "hum", shtH, 0);
+  JsonObject dh = doc["dht22"].to<JsonObject>();
+  setNum(dh, "temp", dhtT, 1);
+  setNum(dh, "hum", dhtH, 0);
   doc["light"] = lightOn;
   doc["pump"] = pumpOn;
   doc["pumpRemaining"] = pumpOn ? (long)(pumpUntil - millis()) / 1000 : 0;
@@ -339,6 +365,13 @@ void setup() {
   dht.begin();
   Wire.begin(PIN_SDA, PIN_SCL);
   bh1750Ok = lightMeter.begin(BH1750::CONTINUOUS_HIGH_RES_MODE);
+  sht40Ok = sht4.begin(&Wire);
+  if (sht40Ok) {
+    sht4.setPrecision(SHT4X_HIGH_PRECISION);
+    sht4.setHeater(SHT4X_NO_HEATER);
+  } else {
+    Serial.println("ไม่พบ SHT40 — จะใช้ DHT22 แทน (ตรวจสาย SDA/SCL ถ้าต่อ SHT40 ไว้)");
+  }
   if (!bh1750Ok) Serial.println("ไม่พบ BH1750 — ตรวจสาย SDA/SCL");
 
   loadConfig();
@@ -366,8 +399,8 @@ void loop() {
   if (millis() - lastRead > 2500) {  // DHT22 อ่านได้ไม่เร็วกว่า 2 วินาที
     lastRead = millis();
     readSensors();
-    Serial.printf("T=%.1f H=%.0f soil=%.0f%% (raw %d) lux=%.0f light=%d pump=%d\n",
-                  S.temp, S.hum, S.soil, S.soilRaw, S.lux, lightOn, pumpOn);
+    Serial.printf("T=%.1f H=%.0f [SHT40 %.1f/%.0f DHT22 %.1f/%.0f] soil=%.0f%% (raw %d) lux=%.0f light=%d pump=%d\n",
+                  S.temp, S.hum, shtT, shtH, dhtT, dhtH, S.soil, S.soilRaw, S.lux, lightOn, pumpOn);
   }
 
   automation();

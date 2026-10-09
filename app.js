@@ -324,6 +324,7 @@
     s.lux = clamp(jitter(daylight * 28000 + 300, 900), 0, 60000);
     s.temp = clamp(jitter(s.temp + (26 + daylight * 8 - s.temp) * 0.02, 0.25), 15, 45);
     s.hum = clamp(jitter(s.hum + (75 - daylight * 15 - s.hum) * 0.02, 0.6), 20, 99);
+    state.air = { sht40: { temp: s.temp, hum: s.hum }, dht22: { temp: s.temp + 0.4, hum: s.hum - 2 }, source: "sht40" };
     if (state.pump.on) {
       s.soil = clamp(s.soil + 1.6 * scaled, 0, 95);
     } else {
@@ -360,6 +361,7 @@
     if (isNum(data.pumpMinutesToday)) state.pump.minutesToday = data.pumpMinutesToday;
     if (["schedule", "light", "manual"].includes(data.lightMode)) state.light.mode = data.lightMode;
     state.board = { soilRaw: data.soilRaw, clock: data.clock, rssi: data.rssi };
+    state.air = { sht40: data.sht40 || {}, dht22: data.dht22 || {}, source: data.tempSource || null };
     state.updatedAt = Date.now();
   }
 
@@ -546,13 +548,21 @@
     </section>${navBar()}`;
   };
 
+  function airDevice(key, sub, role) {
+    const a = (state.air || {})[key] || {};
+    const active = (state.air || {}).source === key;
+    return { id: key, type: "sensor", name: `อากาศ (${role})`, sub: `${sub}${active ? " · ใช้อยู่" : ""}`, icon: "thermo", c: "c-orange",
+      value: isNum(a.temp) ? `${fmt1(a.temp)}°C · ${rnd(a.hum)}%` : "ไม่พบ", metric: "temp" };
+  }
+
   function deviceList() {
     const s = state.sensors;
     return [
       { id: "light", type: "control", name: "ไฟปลูกต้นไม้", sub: "รีเลย์ช่อง 1", icon: "bulb", c: "c-yellow", on: state.light.on },
       { id: "pump", type: "control", name: "ปั๊มน้ำ", sub: "รีเลย์ช่อง 2", icon: "drop", c: "c-blue", on: state.pump.on },
       { id: "soil", type: "sensor", name: "ความชื้นดิน", sub: "Capacitive · GPIO34", icon: "drop", c: "c-blue", value: `${rnd(s.soil)}%`, go: "pump" },
-      { id: "dht", type: "sensor", name: "อุณหภูมิ/ความชื้นอากาศ", sub: "DHT22 · GPIO4", icon: "thermo", c: "c-orange", value: `${fmt1(s.temp)}°C`, metric: "temp" },
+      airDevice("sht40", "SHT40 · I2C", "ตัวหลัก"),
+      airDevice("dht22", "DHT22 · GPIO4", "ตัวสำรอง"),
       { id: "lux", type: "sensor", name: "ความเข้มแสง", sub: "BH1750 · I2C", icon: "sun", c: "c-yellow", value: `${fmtNum(s.lux)} lux`, metric: "lux" },
       { id: "cam", type: "sensor", name: "กล้องแปลงผัก", sub: "ESP32-CAM · OV2640", icon: "camera", c: "c-green", value: CONFIG.camBase ? "LIVE" : "จำลอง", go: "camera" },
     ];
@@ -575,7 +585,7 @@
 
   views.devices = () => `
     <section class="screen">
-      <div class="head-row"><h1 class="title">อุปกรณ์</h1><span class="meta">ต่อกับ ESP32 · 6 ชิ้น</span></div>
+      <div class="head-row"><h1 class="title">อุปกรณ์</h1><span class="meta">ต่อกับ ESP32 · 7 ชิ้น</span></div>
       <button class="guide-link" data-go="guide">${icon("book")} วิธีต่อวงจรและรายการอุปกรณ์ ${icon("arrow")}</button>
       <label class="search">${icon("search", 'style="color:#4b544e"')}<input id="dev-search" type="search" placeholder="ค้นหาอุปกรณ์" value="${esc(ui.devQuery)}" autocomplete="off"></label>
       <div class="chips">
@@ -1104,7 +1114,10 @@
     { id: "power", name: "ไฟเลี้ยง: อะแดปเตอร์ 12V → LM2596 → 5V", icon: "zap", c: "c-yellow", left: "LM2596", right: "ESP32",
       rows: [["OUT+", "VIN (5V)", W.red], ["OUT−", "GND", W.black]],
       note: "ต่อ IN+/IN− ของ LM2596 เข้าอะแดปเตอร์ 12V แล้ว<b>หมุนเกลียวปรับให้ OUT วัดได้ 5.0V ด้วยมิเตอร์ก่อน</b>ค่อยต่อเข้าบอร์ด · ห้ามเสียบ USB กับ VIN พร้อมกันตอนใช้งานจริง" },
-    { id: "dht", name: "DHT22 อุณหภูมิ/ความชื้นอากาศ", icon: "thermo", c: "c-orange", left: "DHT22", right: "ESP32",
+    { id: "sht40", name: "SHT40 อุณหภูมิ/ความชื้นอากาศ (ตัวหลัก, I2C)", icon: "thermo", c: "c-orange", left: "SHT40", right: "ESP32",
+      rows: [["VIN / VCC", "3V3", W.red], ["GND", "GND", W.black], ["SCL", "GPIO 22", W.blue], ["SDA", "GPIO 21", W.purple]],
+      note: "ต่อสาย SDA/SCL ร่วมกับ BH1750 ได้เลย (บัส I2C เดียวกัน) · ติดไว้ในที่ร่ม อากาศถ่ายเท ไม่โดนแดดและน้ำตรง ๆ (ใส่ในกล่องกันแดดแบบมีช่องระบาย)" },
+    { id: "dht", name: "DHT22 อุณหภูมิ/ความชื้นอากาศ (ตัวสำรอง)", icon: "thermo", c: "c-orange", left: "DHT22", right: "ESP32",
       rows: [["+ / VCC", "3V3", W.red], ["OUT / DATA", "GPIO 4", W.yellow], ["− / GND", "GND", W.black]],
       note: "ถ้าเป็นตัวเปล่า 4 ขา (ไม่มีแผงวงจร) ให้ใส่ตัวต้านทาน 10kΩ ระหว่าง VCC กับ DATA · ขา 3 ไม่ต่อ" },
     { id: "soil", name: "เซนเซอร์ความชื้นดิน (Capacitive v1.2)", icon: "drop", c: "c-blue", left: "Soil", right: "ESP32",
@@ -1129,7 +1142,8 @@
 
   const PARTS = [
     ["ESP32 DevKit V1 (ESP32-WROOM-32, 30 ขา)", 1, 150, "บอร์ดหลัก"],
-    ["DHT22 (AM2302) แบบมีแผงวงจร", 1, 120, "อุณหภูมิ/ความชื้นอากาศ"],
+    ["SHT40 (โมดูล I2C)", 1, 120, "อุณหภูมิ/ความชื้นอากาศ ตัวหลัก (แม่นยำ ±0.2°C)"],
+    ["DHT22 (AM2302) แบบมีแผงวงจร", 1, 120, "ตัวสำรอง — ไม่มีก็ได้"],
     ["Capacitive Soil Moisture Sensor v1.2", 1, 40, "แบบ capacitive ไม่ผุกร่อนเหมือนแบบเข็ม"],
     ["BH1750 (GY-302)", 1, 50, "วัดแสง lux"],
     ["โมดูลรีเลย์ 5V 2 ช่อง (มี optocoupler)", 1, 45, "สั่งไฟปลูก/ปั๊ม"],
@@ -1147,10 +1161,10 @@
   const STEPS = [
     ["เตรียมอุปกรณ์", "ดูรายการในแท็บ <b>อุปกรณ์</b> · ต้องมีมัลติมิเตอร์, หัวแร้ง (หรือใช้ breadboard ทดลองก่อน) และสาย USB สำหรับ ESP32"],
     ["ติดตั้ง Arduino IDE", "ดาวน์โหลด Arduino IDE 2 → <i>File › Preferences › Additional boards manager URLs</i> ใส่ <code>https://espressif.github.io/arduino-esp32/package_esp32_index.json</code> → <i>Boards Manager</i> ติดตั้ง <b>esp32 by Espressif</b>"],
-    ["ติดตั้งไลบรารี", "<i>Library Manager</i> ค้นหาและติดตั้ง: <b>DHT sensor library</b>, <b>Adafruit Unified Sensor</b>, <b>BH1750</b> (Christopher Laws), <b>ArduinoJson</b>"],
+    ["ติดตั้งไลบรารี", "<i>Library Manager</i> ค้นหาและติดตั้ง: <b>Adafruit SHT4x Library</b>, <b>DHT sensor library</b>, <b>Adafruit Unified Sensor</b>, <b>BH1750</b> (Christopher Laws), <b>ArduinoJson</b>"],
     ["ทดสอบบอร์ดเปล่า", "เปิด <code>firmware/smartfarm/smartfarm.ino</code> แก้ <code>WIFI_SSID</code>/<code>WIFI_PASS</code> → เลือกบอร์ด <b>ESP32 Dev Module</b> → Upload → เปิด Serial Monitor (115200) จะเห็น <code>Smart Farm ready: http://192.168.x.x</code> จด IP ไว้"],
     ["ต่อไฟเลี้ยง 5V", "ปรับ LM2596 ให้ได้ 5.0V <b>ก่อน</b>ต่อเข้า VIN · ต่อ GND ทุกตัวรวมกัน (ESP32, LM2596, รีเลย์, เซนเซอร์) ให้เป็นกราวด์เดียวกัน"],
-    ["ต่อ DHT22 และ BH1750", "ต่อตามแท็บ <b>ต่อทีละชิ้น</b> → รีเซ็ตบอร์ด → Serial Monitor ต้องเห็นค่า T, H และ lux (ถ้าขึ้น “ไม่พบ BH1750” ให้สลับ SDA/SCL)"],
+    ["ต่อ SHT40, BH1750 และ DHT22", "SHT40 กับ BH1750 ใช้สาย SDA/SCL ร่วมกัน · ต่อตามแท็บ <b>ต่อทีละชิ้น</b> → รีเซ็ตบอร์ด → Serial Monitor ต้องเห็น <code>[SHT40 ../.. DHT22 ../..]</code> และ lux (ถ้าขึ้น “ไม่พบ SHT40/BH1750” ให้ตรวจหรือสลับ SDA/SCL)"],
     ["ต่อเซนเซอร์ความชื้นดิน + คาลิเบรต", "ดูค่า <code>raw</code> ใน Serial Monitor: ตอนถืออยู่ในอากาศ → ใส่ใน <code>SOIL_DRY</code> · ตอนจุ่มน้ำถึงขีด → ใส่ใน <code>SOIL_WET</code> แล้วอัปโหลดใหม่"],
     ["ทดสอบรีเลย์ (ยังไม่ต่อโหลด)", "ต่อฝั่งควบคุมของรีเลย์ → ในแอปกดเปิด/ปิดไฟและปั๊ม ต้องได้ยินเสียงคลิกและไฟ LED บนโมดูลติด"],
     ["ต่อไฟปลูกและปั๊ม 12V", "ถอดปลั๊กอะแดปเตอร์ก่อนต่อ · ต่อตามแท็บต่อทีละชิ้น (ฝั่งกำลัง) · ใส่ไดโอด 1N4007 คร่อมปั๊ม · ทดสอบสั่งจากแอปอีกครั้ง"],
@@ -1159,7 +1173,7 @@
     ["ใส่กล่องและติดตั้งหน้างาน", "ใส่บอร์ด รีเลย์ LM2596 ในกล่องกันน้ำ ร้อยสายผ่านเคเบิลแกลนด์ · วางกล่องให้สูงจากพื้น ไม่โดนน้ำจากการรดน้ำ · DHT22 ควรอยู่ในที่ร่ม อากาศถ่ายเทได้"],
   ];
 
-  let guideDone = localGet("sf.guideDone3", []);
+  let guideDone = localGet("sf.guideDone4", []);
   const guideProgress = () => `${guideDone.length}/${STEPS.length}`;
 
   function wireSVG(w) {
@@ -1190,7 +1204,7 @@
     const wire = (d, col, label, lx, ly, anchor = "middle") =>
       `<path d="${d}" fill="none" stroke="${col}" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
        ${label ? `<text x="${lx}" y="${ly}" text-anchor="${anchor}" class="ov-l">${label}</text>` : ""}`;
-    const sensors = [["DHT22", "GPIO 4", 40], ["Soil Moisture", "GPIO 34", 130], ["BH1750", "SDA 21 · SCL 22", 220]];
+    const sensors = [["SHT40", "SDA 21 · SCL 22", 40], ["BH1750", "SDA 21 · SCL 22", 130], ["DHT22 (สำรอง)", "GPIO 4", 220], ["Soil Moisture", "GPIO 34", 310]];
     return `<svg class="ov-svg" viewBox="0 0 900 575" role="img" aria-label="แผนผังวงจรรวม">
       ${wire("M105 110 V200", W.red, "12V", 114, 162, "start")}
       ${wire("M190 235 H300", W.red, "5V → VIN", 245, 226)}
@@ -1207,7 +1221,7 @@
       ${box(10, 500, 110, 64, "ไฟปลูก", "12V")}
       ${box(130, 500, 110, 64, "ปั๊มน้ำ", "12V + 1N4007")}
       ${sensors.map(([n, , y]) => box(640, y, 240, 70, n, "")).join("")}
-      <text x="760" y="330" text-anchor="middle" class="ov-s">เซนเซอร์ทุกตัวใช้ 3V3 + GND ร่วม</text>
+      <text x="760" y="420" text-anchor="middle" class="ov-s">เซนเซอร์ทุกตัวใช้ 3V3 + GND ร่วม</text>
       <text x="410" y="440" text-anchor="middle" class="ov-s">GND ทุกตัวต่อรวมกัน</text>
     </svg>`;
   }
@@ -1227,7 +1241,7 @@
     return `<div class="live-grid">
       ${cell("soilRaw (ดิน)", isNum(b.soilRaw) ? b.soilRaw : "–")}${cell("ความชื้นดิน", `${rnd(s.soil)}%`)}
       ${cell("อุณหภูมิ", `${fmt1(s.temp)}°C`)}${cell("แสง", `${fmtNum(s.lux)} lux`)}
-      ${cell("ความชื้นอากาศ", `${rnd(s.hum)}%`)}${cell("เวลาบนบอร์ด", b.clock ? "ซิงก์แล้ว" : "ยังไม่ซิงก์")}
+      ${cell("เซนเซอร์อากาศที่ใช้", (state.air || {}).source === "sht40" ? "SHT40" : (state.air || {}).source === "dht22" ? "DHT22" : "ไม่พบ")}${cell("เวลาบนบอร์ด", b.clock ? "ซิงก์แล้ว" : "ยังไม่ซิงก์")}
     </div>`;
   }
 
@@ -1305,7 +1319,7 @@
     if (d.step !== undefined) {
       const i = Number(d.step);
       guideDone = guideDone.includes(i) ? guideDone.filter((x) => x !== i) : [...guideDone, i];
-      localSet("sf.guideDone3", guideDone);
+      localSet("sf.guideDone4", guideDone);
       return render();
     }
     if (d.guide === "zoom") {
@@ -1680,6 +1694,10 @@
   state.day = today;
   if (state.pump.on && Date.now() > state.pump.runUntil) state.pump.on = false;
 
+  if (!board() && !state.air) {
+    const s0 = state.sensors;
+    state.air = { sht40: { temp: s0.temp, hum: s0.hum }, dht22: { temp: s0.temp + 0.4, hum: s0.hum - 2 }, source: "sht40" };
+  }
   automation();
   render();
   setInterval(tick, CONFIG.pollMs);

@@ -1,5 +1,5 @@
 /* Smart Farm service worker — ทำให้เปิดแอปได้แม้ไม่มีเน็ต */
-const CACHE = "smartfarm-v4";
+const CACHE = "smartfarm-v5";
 const SHELL = ["./", "./index.html", "./styles.css", "./app.js", "./manifest.webmanifest",
   "./icons/icon-192.png", "./icons/icon-512.png", "./icons/favicon-32.png"];
 
