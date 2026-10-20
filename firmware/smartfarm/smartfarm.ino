@@ -36,6 +36,8 @@ const char *HOSTNAME = "smartfarm";  // เข้าได้ที่ http://sm
 // คาลิเบรตเซนเซอร์ความชื้นดิน: เปิด http://<IP>/sensors ดูค่า soilRaw
 const int SOIL_DRY = 3000;  // ค่า soilRaw ตอนเซนเซอร์อยู่ในอากาศ/ดินแห้งสนิท
 const int SOIL_WET = 1300;  // ค่า soilRaw ตอนจุ่มน้ำ (ถึงขีดบนของเซนเซอร์)
+const int SOIL_RAW_MIN = 200;   // ต่ำกว่านี้ถือว่าสายหลุด/ช็อต
+const int SOIL_RAW_MAX = 3900;  // สูงกว่านี้ถือว่าไม่ได้ต่อเซนเซอร์
 
 // โมดูลรีเลย์ส่วนใหญ่ทำงานเมื่อขา IN เป็น LOW
 const bool RELAY_ACTIVE_LOW = true;
@@ -136,7 +138,9 @@ void readSensors() {
   long sum = 0;
   for (int i = 0; i < 10; i++) { sum += analogRead(PIN_SOIL); delay(2); }
   S.soilRaw = sum / 10;
-  S.soil = constrain(map(S.soilRaw, SOIL_DRY, SOIL_WET, 0, 100), 0, 100);
+  // ค่านอกช่วงนี้ = สายหลุด/ไม่ได้ต่อ → ไม่ใช้ค่า (กันรดน้ำผิดพลาด)
+  if (S.soilRaw < SOIL_RAW_MIN || S.soilRaw > SOIL_RAW_MAX) S.soil = NAN;
+  else S.soil = constrain(map(S.soilRaw, SOIL_DRY, SOIL_WET, 0, 100), 0, 100);
 
   if (bh1750Ok) {
     float lx = lightMeter.readLightLevel();
