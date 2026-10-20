@@ -332,12 +332,58 @@ void handleOptions() {
   server.send(204);
 }
 
+// ---------- Wi-Fi diagnostics ----------
+const char *wifiReasonText(uint8_t r) {
+  switch (r) {
+    case 201: case 210: case 211: case 212:
+      return "หาชื่อ Wi-Fi ไม่เจอ — ตรวจ WIFI_SSID (ตัวพิมพ์เล็ก/ใหญ่, เว้นวรรค), ต้องเป็น 2.4GHz, อยู่ใกล้เราเตอร์";
+    case 2: case 15: case 202: case 204:
+      return "รหัสผ่านผิด — ตรวจ WIFI_PASS";
+    case 203: case 205:
+      return "เราเตอร์ไม่ยอมให้เชื่อม — ลองรีสตาร์ทเราเตอร์ หรือปิด MAC filter";
+    case 8:
+      return "ตัดการเชื่อมต่อเอง";
+    default:
+      return "เชื่อมต่อไม่สำเร็จ";
+  }
+}
+
+void onWifiEvent(WiFiEvent_t event, WiFiEventInfo_t info) {
+  if (event != ARDUINO_EVENT_WIFI_STA_DISCONNECTED) return;
+  static uint8_t lastReason = 0;
+  static unsigned long lastPrint = 0;
+  uint8_t r = info.wifi_sta_disconnected.reason;
+  if (r != lastReason || millis() - lastPrint > 15000) {  // ไม่พิมพ์ซ้ำรัว ๆ
+    lastReason = r;
+    lastPrint = millis();
+    Serial.printf("\n[wifi] หลุด/ต่อไม่ได้ (reason %u): %s\n", r, wifiReasonText(r));
+  }
+}
+
+// ---------- I2C scan (ช่วยหาว่าเซนเซอร์ต่อถูกไหม) ----------
+void scanI2C() {
+  Serial.print("[i2c] พบอุปกรณ์:");
+  int found = 0;
+  for (uint8_t addr = 1; addr < 127; addr++) {
+    Wire.beginTransmission(addr);
+    if (Wire.endTransmission() == 0) {
+      found++;
+      const char *name = addr == 0x44 || addr == 0x45 ? " (SHT40)" : (addr == 0x23 || addr == 0x5C ? " (BH1750)" : "");
+      Serial.printf(" 0x%02X%s", addr, name);
+    }
+  }
+  if (!found) Serial.print(" ไม่มีเลย — ตรวจไฟ 3V3/GND ของเซนเซอร์ และสาย SDA=GPIO21, SCL=GPIO22");
+  Serial.println();
+}
+
 // ---------- setup / loop ----------
 void connectWifi() {
+  WiFi.onEvent(onWifiEvent);
   WiFi.setHostname(HOSTNAME);  // ต้องตั้งก่อน WiFi.mode() ไม่งั้นเราเตอร์จะเห็นเป็น esp32-xxxxxx
   WiFi.mode(WIFI_STA);
+  WiFi.setAutoReconnect(true);
   WiFi.begin(WIFI_SSID, WIFI_PASS);
-  Serial.print("Connecting WiFi");
+  Serial.printf("Connecting WiFi \"%s\"", WIFI_SSID);
   unsigned long start = millis();
   while (WiFi.status() != WL_CONNECTED && millis() - start < 20000) {
     digitalWrite(PIN_LED, !digitalRead(PIN_LED));
@@ -368,6 +414,7 @@ void setup() {
 
   dht.begin();
   Wire.begin(PIN_SDA, PIN_SCL);
+  scanI2C();
   bh1750Ok = lightMeter.begin(BH1750::CONTINUOUS_HIGH_RES_MODE);
   sht40Ok = sht4.begin(&Wire);
   if (sht40Ok) {
@@ -409,9 +456,20 @@ void loop() {
 
   automation();
 
+  // ต่อ Wi-Fi ใหม่ถ้าหลุดนาน (ไม่เรียกซ้ำระหว่างที่กำลังเชื่อมต่อ กัน "sta is connecting" error)
   static unsigned long lastWifiCheck = 0;
-  if (WiFi.status() != WL_CONNECTED && millis() - lastWifiCheck > 30000) {
+  static bool wasConnected = false;
+  bool connected = WiFi.status() == WL_CONNECTED;
+  if (connected && !wasConnected) {
+    Serial.printf("[wifi] เชื่อมต่อแล้ว: http://%s\n", WiFi.localIP().toString().c_str());
+    digitalWrite(PIN_LED, HIGH);
+  }
+  if (!connected && wasConnected) digitalWrite(PIN_LED, LOW);
+  wasConnected = connected;
+  if (!connected && millis() - lastWifiCheck > 60000) {
     lastWifiCheck = millis();
-    WiFi.reconnect();
+    WiFi.disconnect();
+    delay(100);
+    WiFi.begin(WIFI_SSID, WIFI_PASS);
   }
 }
