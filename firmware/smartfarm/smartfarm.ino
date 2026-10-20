@@ -376,6 +376,31 @@ void scanI2C() {
   Serial.println();
 }
 
+// ---------- คำสั่งทดสอบผ่าน Serial Monitor (ไม่ต้องใช้ Wi-Fi) ----------
+// พิมพ์: light on | light off | pump on | pump off | status
+void handleSerial() {
+  if (!Serial.available()) return;
+  String cmd = Serial.readStringUntil('\n');
+  cmd.trim();
+  cmd.toLowerCase();
+  if (cmd.length() == 0) return;
+  if (cmd == "light on" || cmd == "light off") {
+    config["lightMode"] = "manual";  // กันตารางเวลาสั่งกลับ (เหมือนกดในแอป)
+    saveConfig();
+    setLight(cmd == "light on");
+  } else if (cmd == "pump on") {
+    startPump(1, "สั่งจาก Serial");
+  } else if (cmd == "pump off") {
+    stopPump("สั่งจาก Serial");
+  } else if (cmd == "status") {
+    Serial.printf("light=%s pump=%s lightMode=%s wifi=%s\n", lightOn ? "ON" : "OFF", pumpOn ? "ON" : "OFF",
+                  (const char *)(config["lightMode"] | "?"),
+                  WiFi.status() == WL_CONNECTED ? WiFi.localIP().toString().c_str() : "ยังไม่เชื่อมต่อ");
+  } else {
+    Serial.println("คำสั่ง: light on | light off | pump on | pump off | status");
+  }
+}
+
 // ---------- setup / loop ----------
 void connectWifi() {
   WiFi.onEvent(onWifiEvent);
@@ -399,11 +424,12 @@ void connectWifi() {
 }
 
 void setup() {
-  // ตั้งรีเลย์เป็น "ปิด" ก่อนเปิดใช้ขา กันรีเลย์กระตุกตอนบูต
-  writeRelay(PIN_RELAY_LIGHT, false);
-  writeRelay(PIN_RELAY_PUMP, false);
+  // ตั้งขารีเลย์แล้วสั่ง "ปิด" ทันที (ESP32 core 3.x ไม่รับ digitalWrite ก่อน pinMode
+  // และ pinMode(OUTPUT) เริ่มที่ LOW = รีเลย์แบบ active-low จะเปิด ถ้าไม่สั่งปิดตรงนี้)
   pinMode(PIN_RELAY_LIGHT, OUTPUT);
+  writeRelay(PIN_RELAY_LIGHT, false);
   pinMode(PIN_RELAY_PUMP, OUTPUT);
+  writeRelay(PIN_RELAY_PUMP, false);
   pinMode(PIN_LED, OUTPUT);
   analogReadResolution(12);
   analogSetPinAttenuation(PIN_SOIL, ADC_11db);
@@ -441,10 +467,12 @@ void setup() {
   server.begin();
 
   readSensors();
+  Serial.println("พิมพ์คำสั่งทดสอบได้: light on | light off | pump on | pump off | status");
 }
 
 void loop() {
   server.handleClient();
+  handleSerial();
 
   static unsigned long lastRead = 0;
   if (millis() - lastRead > 2500) {  // DHT22 อ่านได้ไม่เร็วกว่า 2 วินาที
