@@ -334,8 +334,8 @@ void handleOptions() {
 
 // ---------- setup / loop ----------
 void connectWifi() {
+  WiFi.setHostname(HOSTNAME);  // ต้องตั้งก่อน WiFi.mode() ไม่งั้นเราเตอร์จะเห็นเป็น esp32-xxxxxx
   WiFi.mode(WIFI_STA);
-  WiFi.setHostname(HOSTNAME);
   WiFi.begin(WIFI_SSID, WIFI_PASS);
   Serial.print("Connecting WiFi");
   unsigned long start = millis();

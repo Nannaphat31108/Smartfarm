@@ -14,6 +14,7 @@
 
 const char *WIFI_SSID = "YOUR_WIFI";
 const char *WIFI_PASS = "YOUR_PASSWORD";
+const char *HOSTNAME = "smartfarm-cam";  // ชื่อที่เห็นในเราเตอร์
 
 // AI-Thinker pin map
 #define PWDN_GPIO_NUM 32
@@ -188,6 +189,7 @@ void setup() {
     ESP.restart();
   }
 
+  WiFi.setHostname(HOSTNAME);  // ต้องตั้งก่อน WiFi.mode()
   WiFi.mode(WIFI_STA);
   WiFi.setSleep(false);
   WiFi.begin(WIFI_SSID, WIFI_PASS);
