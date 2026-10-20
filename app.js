@@ -7,12 +7,19 @@
    * apiBase: ใส่ URL ของ ESP32 (เช่น "http://192.168.1.50") เพื่อใช้ข้อมูลจริง
    *          ถ้าเว้นว่างไว้ แอปจะจำลองค่าเซนเซอร์ให้เอง
    * ------------------------------------------------------------------ */
+  // "192.168.1.50" or "smartfarm.local/" → "http://192.168.1.50" (fetch needs a scheme)
+  function normUrl(u) {
+    u = String(u || "").trim().replace(/\/+$/, "");
+    if (u && !/^https?:\/\//i.test(u)) u = "http://" + u;
+    return u;
+  }
+
   const CONFIG = {
-    apiBase: localGet("sf.apiBase", ""),
+    apiBase: normUrl(localGet("sf.apiBase", "")),
     pollMs: 5000,
     // ESP32-CAM: URL หลัก (มี /capture, /control) และ URL สตรีม (ปกติคือพอร์ต 81 /stream)
-    camBase: localGet("sf.camBase", ""),
-    camStream: localGet("sf.camStream", ""),
+    camBase: normUrl(localGet("sf.camBase", "")),
+    camStream: normUrl(localGet("sf.camStream", "")),
     // ความเร็วจำลอง: 1 นาทีของปั๊ม = 60000 / DEMO_SPEED ms
     demoSpeed: 20,
   };
@@ -228,11 +235,27 @@
     }
   }
 
+  // with a real board: confirm only after the board answers, otherwise undo and say why
+  function relayCmd(body, revert, okMsg) {
+    api("/relay", body).then((res) => {
+      if (res) {
+        applyBoard(res);
+        if (okMsg) toast(okMsg);
+      } else {
+        revert();
+        toast(`ส่งคำสั่งไม่ถึงบอร์ด — ตรวจ IP (${CONFIG.apiBase}) และ Wi-Fi`);
+      }
+      save();
+      refresh();
+    });
+  }
+
   function setLight(on, source) {
     if (state.light.on === on) return;
     state.light.on = on;
-    api("/relay", { channel: 1, on });
-    if (source === "user") toast(on ? "เปิดไฟปลูกต้นไม้แล้ว" : "ปิดไฟปลูกต้นไม้แล้ว");
+    const msg = source === "user" ? (on ? "เปิดไฟปลูกต้นไม้แล้ว" : "ปิดไฟปลูกต้นไม้แล้ว") : null;
+    if (board()) relayCmd({ channel: 1, on }, () => { state.light.on = !on; }, msg);
+    else if (msg) toast(msg);
   }
 
   function startPump(minutes, source) {
@@ -241,8 +264,10 @@
     state.pump.runUntil = Date.now() + ms;
     state.pump.runMin = minutes;
     state.pump.lastRun = { at: Date.now(), min: minutes };
-    api("/relay", { channel: 2, on: true, minutes });
-    if (source === "user") toast(`เริ่มรดน้ำ ${minutes} นาที`);
+    if (board()) {
+      relayCmd({ channel: 2, on: true, minutes }, () => { state.pump.on = false; state.pump.runUntil = 0; },
+        source === "user" ? `เริ่มรดน้ำ ${minutes} นาที` : null);
+    } else if (source === "user") toast(`เริ่มรดน้ำ ${minutes} นาที`);
     else notify("pump", source);
   }
   function stopPump(source) {
@@ -251,8 +276,8 @@
     if (!board()) state.pump.minutesToday += Math.max(0, ranMin);
     state.pump.on = false;
     state.pump.runUntil = 0;
-    api("/relay", { channel: 2, on: false });
-    if (source === "user") toast("หยุดปั๊มน้ำแล้ว");
+    if (board()) relayCmd({ channel: 2, on: false }, () => { state.pump.on = true; }, source === "user" ? "หยุดปั๊มน้ำแล้ว" : null);
+    else if (source === "user") toast("หยุดปั๊มน้ำแล้ว");
   }
 
   function boardConfig() {
@@ -1089,8 +1114,8 @@
       <p class="muted" style="font-size:13.5px;margin:0 0 10px">ใช้ได้กับตัวอย่าง <b>CameraWebServer</b> ของ Arduino หรือโค้ดใน <b>firmware/esp32cam</b></p>
       <button class="btn btn-solid" data-save>บันทึก</button>`, (el) => {
       el.querySelector("[data-save]").addEventListener("click", () => {
-        CONFIG.camBase = el.querySelector('[name="cam"]').value.trim();
-        CONFIG.camStream = el.querySelector('[name="stream"]').value.trim();
+        CONFIG.camBase = normUrl(el.querySelector('[name="cam"]').value);
+        CONFIG.camStream = normUrl(el.querySelector('[name="stream"]').value);
         localSet("sf.camBase", CONFIG.camBase);
         localSet("sf.camStream", CONFIG.camStream);
         camError = false;
@@ -1536,7 +1561,7 @@
       <button class="btn" style="height:46px;color:var(--primary)" data-goguide>${icon("book")} วิธีต่อวงจรและอัปโหลดโค้ด</button>
       <a href="privacy.html" target="_blank" rel="noopener" class="muted" style="display:block;text-align:center;font-size:13.5px;margin-top:6px">นโยบายความเป็นส่วนตัว</a>`, (el) => {
       el.querySelector('[data-set="save"]').addEventListener("click", () => {
-        CONFIG.apiBase = el.querySelector("input").value.trim();
+        CONFIG.apiBase = normUrl(el.querySelector("input").value);
         localSet("sf.apiBase", CONFIG.apiBase);
         state.online = true;
         closeSheet();
